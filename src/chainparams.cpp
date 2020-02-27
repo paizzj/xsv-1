@@ -14,6 +14,7 @@
 #include "utilstrencodings.h"
 
 #include <cassert>
+#include <iostream>
 
 #include "chainparamsseeds.h"
 
@@ -67,7 +68,7 @@ static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce,
                                  uint32_t nBits, int32_t nVersion,
                                  const Amount genesisReward) {
     const char *pszTimestamp =
-        "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks";
+        "2020-02-27 genesis block";
     const CScript genesisOutputScript =
         CScript() << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909"
                               "a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112"
@@ -147,15 +148,15 @@ public:
         nDefaultPort = 8333;
         nPruneAfterHeight = 100000;
 
-        genesis = CreateGenesisBlock(1231006505, 2083236893, 0x1d00ffff, 1,
+        genesis = CreateGenesisBlock(1582772650, 48272618, 0x1d00ffff, 1,
                                      50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock ==
+       /* assert(consensus.hashGenesisBlock ==
                uint256S("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1"
                         "b60a8ce26f"));
         assert(genesis.hashMerkleRoot ==
                uint256S("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b"
-                        "7afdeda33b"));
+                        "7afdeda33b"));*/
 
         // Note that of those with the service bits flag, most only support a
         // subset of possible options.
