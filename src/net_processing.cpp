@@ -1398,7 +1398,13 @@ static void ProcessGetData(const Config &config, const CNodePtr& pfrom,
                     send = false;
                 }
 
-                bool isMostRecentBlock = chainActive.Tip() == mi->second;
+		//                bool isMostRecentBlock = chainActive.Tip() == mi->second;
+		bool isMostRecentBlock = true;
+		if (mi == mapBlockIndex.end()) {
+		      isMostRecentBlock = false;
+		}
+		else
+		      isMostRecentBlock = chainActive.Tip() == mi->second;
                 // Pruned nodes may have deleted the block, so check whether
                 // it's available before trying to send.
                 if (send && (mi->second->nStatus.hasData())) {
