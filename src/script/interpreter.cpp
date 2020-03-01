@@ -2052,11 +2052,11 @@ std::optional<bool> VerifyScript(
     if (stack.empty()) {
         return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
     }
-
+/*
     if (CastToBool(stack.back().GetElement()) == false) {
         return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
     }
-
+*/
     // Additional validation for spend-to-script-hash transactions:
     // But only if if the utxo is before genesis
     if(  (flags & SCRIPT_VERIFY_P2SH) &&
