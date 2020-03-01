@@ -161,11 +161,11 @@ public:
         // Note that of those with the service bits flag, most only support a
         // subset of possible options.
         // Bitcoin SV seeder
-        vSeeds.push_back(CDNSSeedData("bitcoinsv.io", "seed.bitcoinsv.io", true));
+        //vSeeds.push_back(CDNSSeedData("bitcoinsv.io", "seed.bitcoinsv.io", true));
         // cascharia.com
-        vSeeds.push_back(CDNSSeedData("cascharia.com", "seed.cascharia.com", true));
+        //vSeeds.push_back(CDNSSeedData("cascharia.com", "seed.cascharia.com", true));
         // satoshisvision.network
-        vSeeds.push_back(CDNSSeedData("satoshisvision.network", "seed.satoshisvision.network", true));
+        //vSeeds.push_back(CDNSSeedData("satoshisvision.network", "seed.satoshisvision.network", true));
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<uint8_t>(1, 0);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<uint8_t>(1, 5);
@@ -173,8 +173,8 @@ public:
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x88, 0xB2, 0x1E};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xAD, 0xE4};
 
-        vFixedSeeds = std::vector<SeedSpec6>(
-            pnSeed6_main, pnSeed6_main + ARRAYLEN(pnSeed6_main));
+	//        vFixedSeeds = std::vector<SeedSpec6>(
+	//            pnSeed6_main, pnSeed6_main + ARRAYLEN(pnSeed6_main));
 
         fMiningRequiresPeers = true;
         fDefaultConsistencyChecks = false;
@@ -182,41 +182,7 @@ public:
         fMineBlocksOnDemand = false;
 
         checkpointData = { {
-                {11111, uint256S("0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee"
-                                 "92559f542fdb26e7c1d")},
-                {33333, uint256S("000000002dd5588a74784eaa7ab0507a18ad16a236e7b"
-                                 "1ce69f00d7ddfb5d0a6")},
-                {74000, uint256S("0000000000573993a3c9e41ce34471c079dcf5f52a0e8"
-                                 "24a81e7f953b8661a20")},
-                {105000, uint256S("00000000000291ce28027faea320c8d2b054b2e0fe44"
-                                  "a773f3eefb151d6bdc97")},
-                {134444, uint256S("00000000000005b12ffd4cd315cd34ffd4a594f430ac"
-                                  "814c91184a0d42d2b0fe")},
-                {168000, uint256S("000000000000099e61ea72015e79632f216fe6cb33d7"
-                                  "899acb35b75c8303b763")},
-                {193000, uint256S("000000000000059f452a5f7340de6682a977387c1701"
-                                  "0ff6e6c3bd83ca8b1317")},
-                {210000, uint256S("000000000000048b95347e83192f69cf0366076336c6"
-                                  "39f9b7228e9ba171342e")},
-                {216116, uint256S("00000000000001b4f4b433e81ee46494af945cf96014"
-                                  "816a4e2370f11b23df4e")},
-                {225430, uint256S("00000000000001c108384350f74090433e7fcf79a606"
-                                  "b8e797f065b130575932")},
-                {250000, uint256S("000000000000003887df1f29024b06fc2200b55f8af8"
-                                  "f35453d7be294df2d214")},
-                {279000, uint256S("0000000000000001ae8c72a0b0c301f67e3afca10e81"
-                                  "9efa9041e458e9bd7e40")},
-                {295000, uint256S("00000000000000004d9b4ef50f0f9d686fd69db2e03a"
-                                  "f35a100370c64632a983")},
-                // UAHF fork block.
-                {478558, uint256S("0000000000000000011865af4122fe3b144e2cbeea86"
-                                  "142e8ff2fb4107352d43")},
-                // Nov, 13 DAA activation block.
-                {504031, uint256S("0000000000000000011ebf65b60d0a3de80b8175be70"
-                                  "9d653b4c1a1beeb6ab9c")},
-                // Monolith activation.
-                {530359, uint256S("0000000000000000011ada8bd08f46074f44a8f15539"
-                                  "6f43e38acf9501c49103")}
+	    // todo
             }};
 
         // Data as of block
