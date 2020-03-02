@@ -13,7 +13,7 @@
  * for both bitcoind and bitcoin-sv, to make it harder for attackers to
  * target servers.
  */
-const std::string CLIENT_NAME("Bitcoin SV");
+const std::string CLIENT_NAME("XSV");
 
 /**
  * Client version number

@@ -334,23 +334,23 @@ endif()
 
 # bitcoin-cli
 if(BUILD_BITCOIN_CLI)
-	add_executable(bitcoin-cli bitcoin-cli.cpp)
+	add_executable(xsv-cli bitcoin-cli.cpp)
 	if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-		target_sources(bitcoin-cli PRIVATE bitcoin-cli-res.rc)
+		target_sources(xsv-cli PRIVATE bitcoin-cli-res.rc)
 	endif()
 
-	target_include_directories(bitcoin-cli PRIVATE ${EVENT_INCLUDE_DIR})
-	target_link_libraries(bitcoin-cli common rpcclient ${EVENT_LIBRARY})
+	target_include_directories(xsv-cli PRIVATE ${EVENT_INCLUDE_DIR})
+	target_link_libraries(xsv-cli common rpcclient ${EVENT_LIBRARY})
 endif()
 
 # bitcoin-tx
 if(BUILD_BITCOIN_TX)
-	add_executable(bitcoin-tx bitcoin-tx.cpp)
+	add_executable(xsv-tx bitcoin-tx.cpp)
 	if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-		target_sources(bitcoin-tx PRIVATE bitcoin-tx-res.rc)
+		target_sources(xsv-tx PRIVATE bitcoin-tx-res.rc)
 	endif()
 
-	target_link_libraries(bitcoin-tx bitcoinconsensus)
+	target_link_libraries(xsv-tx bitcoinconsensus)
 endif()
 
 # bitcoin-miner
@@ -361,11 +361,11 @@ if(BUILD_BITCOIN_MINER)
 endif()
 
 # bitcoind
-add_executable(bitcoind bitcoind.cpp)
+add_executable(xsvd bitcoind.cpp)
 target_link_libraries(
-	bitcoind
+	xsvd
 	server
 	$<$<PLATFORM_ID:Linux>:rt>) # use librt.so for aio on Linux
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	target_sources(bitcoind PRIVATE bitcoind-res.rc)
+	target_sources(xsvd PRIVATE bitcoind-res.rc)
 endif()

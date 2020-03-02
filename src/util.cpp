@@ -87,8 +87,8 @@
 // Application startup time (used for uptime calculation)
 const int64_t nStartupTime = GetTime();
 
-const char *const BITCOIN_CONF_FILENAME = "bitcoin.conf";
-const char *const BITCOIN_PID_FILENAME = "bitcoind.pid";
+const char *const BITCOIN_CONF_FILENAME = "xsv.conf";
+const char *const BITCOIN_PID_FILENAME = "xsvd.pid";
 
 ArgsManager gArgs;
 
@@ -337,7 +337,7 @@ fs::path GetDefaultDataDir() {
     return pathRet / "Library/Application Support/Bitcoin";
 #else
     // Unix
-    return pathRet / ".bitcoin";
+    return pathRet / ".xsv";
 #endif
 #endif
 }

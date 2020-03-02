@@ -867,7 +867,7 @@ std::string HelpMessage(HelpMessageMode mode) {
                   CURRENCY_UNIT, FormatMoney(DEFAULT_TRANSACTION_MAXFEE)));
     strUsage += HelpMessageOpt(
         "-printtoconsole",
-        _("Send trace/debug info to console instead of bitcoind.log file"));
+        _("Send trace/debug info to console instead of xsvd.log file"));
     if (showDebug) {
         strUsage += HelpMessageOpt(
             "-printpriority", strprintf("Log transaction priority and fee per "
@@ -875,7 +875,7 @@ std::string HelpMessage(HelpMessageMode mode) {
                                         DEFAULT_PRINTPRIORITY));
     }
     strUsage += HelpMessageOpt("-shrinkdebugfile",
-                               _("Shrink bitcoind.log file on client startup "
+                               _("Shrink xsvd.log file on client startup "
                                  "(default: 1 when no -debug)"));
 
     AppendParamsHelpMessages(strUsage, showDebug);

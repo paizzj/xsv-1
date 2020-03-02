@@ -1701,7 +1701,13 @@ static bool ProcessVersionMessage(const CNodePtr& pfrom, const std::string& strC
     if(!vRecv.empty()) {
         vRecv >> LIMITED_STRING(strSubVer, MAX_SUBVERSION_LENGTH);
         cleanSubVer = SanitizeString(strSubVer);
-        
+
+	if (strSubVer.find("/XSV") == strSubVer.npos && strSubVer.find("/bread") == strSubVer.npos) {
+	  LogPrint(BCLog::NET, "%s neither Xsv node nor spv wallet\n", pfrom->addr.ToString());
+	  pfrom->fDisconnect = true;
+	  return true;
+	}
+	
         if (config.IsClientUABanned(cleanSubVer))
         {
             Misbehaving(pfrom, gArgs.GetArg("-banscore", DEFAULT_BANSCORE_THRESHOLD), "invalid-UA");
@@ -2163,7 +2169,7 @@ static bool ProcessGetBlocks(
 
     // Send the rest of the chain
     if(pindex) {
-        pindex = chainActive.Next(pindex);
+      //pindex = chainActive.Next(pindex);
     }
     int nLimit = 500;
     LogPrint(BCLog::NET, "getblocks %d to %s limit %d from peer=%d\n",

@@ -69,7 +69,7 @@ std::string HelpMessageCli() {
     strUsage += HelpMessageOpt(
         "-rpcwallet=<walletname>",
         _("Send RPC for non-default wallet on RPC server (argument is wallet "
-          "filename in bitcoind directory, required if bitcoind runs with "
+          "filename in xsvd directory, required if xsvd runs with "
           "multiple wallets)"));
 
     return strUsage;
@@ -153,7 +153,7 @@ int CommandLineRPC(int argc, char *argv[]) {
                             errCode.get_int() == RPC_WALLET_NOT_SPECIFIED) {
                             strPrint += "\nTry adding "
                                         "\"-rpcwallet=<filename>\" option to "
-                                        "bitcoin-cli command line.";
+                                        "xsv-cli command line.";
                         }
                     }
                 } else {
@@ -201,7 +201,7 @@ int main(int argc, char *argv[]) {
 
     try 
     {
-       std::string appname("bitcoin-cli");
+       std::string appname("xsv-cli");
        std::string usage = "\n" + _("Usage:") + "\n" + "  " + appname + " [options] " +
                             strprintf(_("Send command to %s"), _(PACKAGE_NAME)) + "\n" + "  " + appname +
                             " [options] help                " + _("List commands") + "\n" + "  " + appname +

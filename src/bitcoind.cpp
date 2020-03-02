@@ -94,7 +94,7 @@ bool AppInit(int argc, char *argv[]) {
             strUsage += FormatParagraph(LicenseInfo());
         } else {
             strUsage += "\n" + _("Usage:") + "\n" +
-                        "  bitcoind [options]                     " +
+                        "  xsvd [options]                     " +
                         strprintf(_("Start %s Daemon"), _(PACKAGE_NAME)) + "\n";
 
             strUsage += "\n" + HelpMessage(HMM_BITCOIND);
@@ -132,9 +132,9 @@ bool AppInit(int argc, char *argv[]) {
         // maxstackmemoryusageconsensus and excessiveblocksize are required parameters
         if (!gArgs.IsArgSet("-maxstackmemoryusageconsensus") || !gArgs.IsArgSet("-excessiveblocksize"))
         {
-            fprintf(stderr, "Mandatory consensus parameter is not set. In order to start bitcoind you must set the "
+            fprintf(stderr, "Mandatory consensus parameter is not set. In order to start xsvd you must set the "
                             "following consensus parameters: \"excessiveblocksize\" and "
-                            "\"maxstackmemoryusageconsensus\". In order to start bitcoind with no limits you can set "
+                            "\"maxstackmemoryusageconsensus\". In order to start xsvd with no limits you can set "
                             "both of these parameters to 0 however it is strongly recommended to ensure you understand "
                             "the implications of this setting.\n\n"
                             "For more information of how to choose these settings safely for your use case refer to: "
@@ -151,7 +151,7 @@ bool AppInit(int argc, char *argv[]) {
 
         if (fCommandLine) {
             fprintf(stderr, "Error: There is no RPC client functionality in "
-                            "bitcoind anymore. Use the bitcoin-cli utility "
+                            "xsvd anymore. Use the bitcoin-cli utility "
                             "instead.\n");
             exit(EXIT_FAILURE);
         }

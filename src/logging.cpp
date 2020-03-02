@@ -8,7 +8,7 @@
 #include "util.h"
 #include "utiltime.h"
 
-constexpr auto LOGFILE = "bitcoind.log";
+constexpr auto LOGFILE = "xsvd.log";
 
 bool fLogIPs = DEFAULT_LOGIPS;
 
