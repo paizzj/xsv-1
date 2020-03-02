@@ -2169,7 +2169,7 @@ static bool ProcessGetBlocks(
 
     // Send the rest of the chain
     if(pindex) {
-      //pindex = chainActive.Next(pindex);
+      pindex = chainActive.Next(pindex);
     }
     int nLimit = 500;
     LogPrint(BCLog::NET, "getblocks %d to %s limit %d from peer=%d\n",
