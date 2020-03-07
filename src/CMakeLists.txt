@@ -355,9 +355,9 @@ endif()
 
 # bitcoin-miner
 if(BUILD_BITCOIN_MINER)
-	add_executable(bitcoin-miner bitcoin-miner.cpp)
-	target_include_directories(bitcoin-miner PRIVATE ${EVENT_INCLUDE_DIR})
-	target_link_libraries(bitcoin-miner common rpcclient bitcoinconsensus ${EVENT_LIBRARY})
+	add_executable(xsv-miner bitcoin-miner.cpp)
+	target_include_directories(xsv-miner PRIVATE ${EVENT_INCLUDE_DIR})
+	target_link_libraries(xsv-miner common rpcclient bitcoinconsensus ${EVENT_LIBRARY})
 endif()
 
 # bitcoind
