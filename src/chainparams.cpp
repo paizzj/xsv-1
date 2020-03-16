@@ -372,13 +372,18 @@ public:
         genesis =
             CreateGenesisBlock(1296688602, 414098458, 0x1d00ffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock ==
-               uint256S("000000000933ea01ad0ee984209779baaec3ced90fa3f408719526"
-                        "f8d77f4943"));
-        assert(genesis.hashMerkleRoot ==
-               uint256S("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b"
-                        "7afdeda33b"));
 
+		assert(consensus.hashGenesisBlock ==
+		uint256S("29830d4540dd4222082d0b7c665d087cf765cb7181ceee280fa95bf22b9cd0da"));
+        /*assert(consensus.hashGenesisBlock ==
+               uint256S("000000000933ea01ad0ee984209779baaec3ced90fa3f408719526"
+                        "f8d77f4943"));*/
+       /* assert(genesis.hashMerkleRoot ==
+               uint256S("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b"
+                        "7afdeda33b"));*/
+
+        assert(genesis.hashMerkleRoot ==
+			  uint256S("7b3aa26f615802b673f868ae9201682c40d95d279ab04c7f7d0e4ddf8c0e5a9e"));
         vFixedSeeds.clear();
         vSeeds.clear();
         // nodes with support for servicebits filtering should be at the top
