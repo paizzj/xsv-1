@@ -20,7 +20,7 @@
 
 #define GENESIS_ACTIVATION_MAIN                 4950
 #define GENESIS_ACTIVATION_STN                  14896
-#define GENESIS_ACTIVATION_TESTNET              1344302
+#define GENESIS_ACTIVATION_TESTNET              1344
 #define GENESIS_ACTIVATION_REGTEST              10000
 
 static CBlock CreateGenesisBlock(const char *pszTimestamp,
@@ -375,11 +375,11 @@ public:
         nPruneAfterHeight = 1000;
 
         genesis =
-            CreateGenesisBlock(1296688602, 414098458, 0x1d00ffff, 1, 50 * COIN);
+            CreateGenesisBlock(1584691144, 1401803327, 0x1d00ffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
 
-		assert(consensus.hashGenesisBlock ==
-		uint256S("29830d4540dd4222082d0b7c665d087cf765cb7181ceee280fa95bf22b9cd0da"));
+		//assert(consensus.hashGenesisBlock ==
+		//uint256S("29830d4540dd4222082d0b7c665d087cf765cb7181ceee280fa95bf22b9cd0da"));
         /*assert(consensus.hashGenesisBlock ==
                uint256S("000000000933ea01ad0ee984209779baaec3ced90fa3f408719526"
                         "f8d77f4943"));*/
@@ -387,16 +387,16 @@ public:
                uint256S("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b"
                         "7afdeda33b"));*/
 
-        assert(genesis.hashMerkleRoot ==
-			  uint256S("7b3aa26f615802b673f868ae9201682c40d95d279ab04c7f7d0e4ddf8c0e5a9e"));
+        //assert(genesis.hashMerkleRoot ==
+		//	  uint256S("7b3aa26f615802b673f868ae9201682c40d95d279ab04c7f7d0e4ddf8c0e5a9e"));
         vFixedSeeds.clear();
         vSeeds.clear();
         // nodes with support for servicebits filtering should be at the top
         // Bitcoin SV seeder
-        vSeeds.push_back(CDNSSeedData("bitcoinsv.io", "testnet-seed.bitcoinsv.io", true));
+        /*vSeeds.push_back(CDNSSeedData("bitcoinsv.io", "testnet-seed.bitcoinsv.io", true));
         vSeeds.push_back(CDNSSeedData("cascharia.com", "testnet-seed.cascharia.com", true));
         vSeeds.push_back(CDNSSeedData("bitcoincloud.net", "testnet-seed.bitcoincloud.net", true));
-
+*/
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<uint8_t>(1, 111);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<uint8_t>(1, 196);
         base58Prefixes[SECRET_KEY] = std::vector<uint8_t>(1, 239);
@@ -498,7 +498,7 @@ public:
         nDefaultPort = 18444;
         nPruneAfterHeight = 1000;
 
-        genesis = CreateGenesisBlock(1296688602, 2, 0x207fffff, 1, 50 * COIN);
+        genesis = CreateGenesisBlock(1584690731, 136746120, 0x207fffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
         assert(consensus.hashGenesisBlock ==
                uint256S("0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b"
