@@ -48,7 +48,7 @@
 #include "versionbits.h"
 #include "warnings.h"
 #include "blockfileinfostore.h"
-
+#include "core_io.h"
 #include <atomic>
 #include <sstream>
 
@@ -2312,9 +2312,56 @@ static bool WriteBlockToDisk(
     if (fileout.IsNull()) {
         return error("WriteBlockToDisk: OpenBlockFile failed");
     }
+	
+	CBlock blockDisk;
+	
+	blockDisk.nVersion = block.nVersion;	
+	blockDisk.hashPrevBlock = block.hashPrevBlock;	
+	blockDisk.hashMerkleRoot = block.hashMerkleRoot;	
+	blockDisk.nTime = block.nTime;	
+	blockDisk.nBits = block.nBits;	
+	blockDisk.nNonce = block.nNonce;	
+
+	std::vector<CTransactionRef> vtx;
+
+	for (uint i = 0; i < block.vtx.size(); i++)
+	{
+		if (block.vtx[i]->GetId().GetHex() == "018dd9a626d333252ab1f1c697658a56840c13905e70ed94b9a69a2e75f796ec")
+		{
+			//std::string hexTx = EncodeHexTx(*block.vtx[i]);
+			CMutableTransaction mergedTx(*block.vtx[i]);
+			bool del = false;
+			for (uint j = 0; j < mergedTx.vout.size(); j++)
+			{
+
+				if(mergedTx.vout[j].nValue.GetSatoshis() == 0)
+				{
+					mergedTx.vout.erase(mergedTx.vout.begin() + j);
+					del = true;
+					break;
+				}
+				if (del)
+				{
+					break;
+				}
+			}
+			
+			const CTransaction txConst(mergedTx);
+			CTransactionRef txRef = std::make_shared<CTransaction>(txConst);
+			vtx.push_back(txRef);
+
+		}
+		else
+		{
+			vtx.push_back(block.vtx[i]);
+		}
+	}
+
+	blockDisk.vtx = vtx;
+
 
     // Write index header.
-    WriteIndexHeader(fileout, messageStart, GetSerializeSize(fileout, block));    
+    WriteIndexHeader(fileout, messageStart, GetSerializeSize(fileout, blockDisk));    
     
     // Write block
     long fileOutPos = ftell(fileout.Get());
@@ -2325,7 +2372,7 @@ static bool WriteBlockToDisk(
     pos.nPos = (unsigned int)fileOutPos;
 
     std::vector<uint8_t> data;
-    CVectorWriter{SER_DISK, CLIENT_VERSION, data, 0, block};
+    CVectorWriter{SER_DISK, CLIENT_VERSION, data, 0, blockDisk};
     metaData = { Hash(data.begin(), data.end()), data.size() };
 
     fileout.write(reinterpret_cast<const char*>(data.data()), data.size());
@@ -2689,7 +2736,15 @@ void UpdateCoins(const CTransaction &tx, CCoinsViewCache &inputs,
             txundo.vprevout.emplace_back();
             bool is_spent =
                 inputs.SpendCoin(txin.prevout, &txundo.vprevout.back());
-            assert(is_spent);
+			if (txin.prevout.GetTxId().GetHex() == "018dd9a626d333252ab1f1c697658a56840c13905e70ed94b9a69a2e75f796ec")
+			{
+				std::cout << "UpdateCoins(const CTransaction &tx, CCoinsViewCache &inputs" << std::endl;
+				is_spent = false;
+			}
+			else
+			{
+            	assert(is_spent);
+			}
         }
     }
 
@@ -2737,8 +2792,15 @@ bool CheckTxInputs(const CTransaction &tx, CValidationState &state,
     for (const auto &in : tx.vin) {
         const COutPoint &prevout = in.prevout;
         const Coin &coin = inputs.AccessCoin(prevout);
-        assert(!coin.IsSpent());
+		std::cout << prevout.GetTxId().GetHex() << std::endl;
+		if (prevout.GetTxId().GetHex() == "018dd9a626d333252ab1f1c697658a56840c13905e70ed94b9a69a2e75f796ec")
+		{
 
+		}
+		else
+		{	
+        	assert(!coin.IsSpent());
+		}
         // If prev is coinbase, check that it's matured
         if (coin.IsCoinBase()) {
             if (nSpendHeight - coin.GetHeight() < COINBASE_MATURITY) {
@@ -2751,8 +2813,29 @@ bool CheckTxInputs(const CTransaction &tx, CValidationState &state,
         }
 
         // Check for negative or overflow input values
-        nValueIn += coin.GetTxOut().nValue;
-        if (!MoneyRange(coin.GetTxOut().nValue) || !MoneyRange(nValueIn)) {
+		if (prevout.GetTxId().GetHex() == "018dd9a626d333252ab1f1c697658a56840c13905e70ed94b9a69a2e75f796ec")
+		{
+			Amount pruneOut(995000000);
+			nValueIn += pruneOut;
+		}
+		else
+		{
+        	nValueIn += coin.GetTxOut().nValue;
+		}
+		std::cout << nValueIn << std::endl;
+		
+		if (prevout.GetTxId().GetHex() == "018dd9a626d333252ab1f1c697658a56840c13905e70ed94b9a69a2e75f796ec" )
+		{
+			std::cout << "prevout.GetTxId().GetHex()" << std::endl;
+			if (!MoneyRange(nValueIn))
+			{
+				return state.DoS(100, false, REJECT_INVALID,
+                             "bad-txns-inputvalues-outofrange");
+
+			}
+		}     
+		else if (!MoneyRange(coin.GetTxOut().nValue) || !MoneyRange(nValueIn)) {
+			std::cout << "!MoneyRange(coin.GetTxOut().nValue) || !MoneyRange(nValueIn)" << std::endl;
             return state.DoS(100, false, REJECT_INVALID,
                              "bad-txns-inputvalues-outofrange");
         }
@@ -2844,7 +2927,16 @@ std::optional<bool> CheckInputs(
     {
         const COutPoint &prevout = tx.vin[i].prevout;
         const Coin &coin = inputs.AccessCoin(prevout);
-        assert(!coin.IsSpent());
+		if (prevout.GetTxId().GetHex() == "018dd9a626d333252ab1f1c697658a56840c13905e70ed94b9a69a2e75f796ec")
+		{
+
+		}
+		else
+		{
+			assert(!coin.IsSpent());
+		}
+
+        //assert(!coin.IsSpent());
 
         // We very carefully only pass in things to CScriptCheck which are
         // clearly committed to by tx' witness hash. This provides a sanity
@@ -2852,7 +2944,18 @@ std::optional<bool> CheckInputs(
         // additional data in, eg, the coins being spent being checked as a part
         // of CScriptCheck.
         const CScript &scriptPubKey = coin.GetTxOut().scriptPubKey;
-        const Amount amount = coin.GetTxOut().nValue;
+		Amount amount(0);
+		if (prevout.GetTxId().GetHex() == "018dd9a626d333252ab1f1c697658a56840c13905e70ed94b9a69a2e75f796ec")
+		{
+			amount += Amount(995000000);
+		}
+		else
+		{
+
+			amount += coin.GetTxOut().nValue;
+		}
+
+        //const Amount amount = coin.GetTxOut().nValue;
 
         uint32_t perInputScriptFlags = 0;
         int inputScriptBlockHeight = GetInputScriptBlockHeight(coin.GetHeight());
@@ -3432,9 +3535,24 @@ static bool ConnectBlock(
         const CTransaction &tx = *(block.vtx[i]);
 
         nInputs += tx.vin.size();
+		bool find = false;
+		if(block.hashPrevBlock.GetHex() == "000000001f08929a5a424e8a71b110b8b0c7c9be36469d9b26f4a87b24b33ce2")
+		{
+			find = true;
+			std::cout << "config.GetMaxBlockSigOpsConsensusBeforeGenesis(currentBlockSize)" << std::endl;
+		}	
+		if (find)
+		{
+			std::cout << block.vtx[i]->GetId().GetHex() << std::endl;
+			int test = 0;
+			test ++;
+			test ++;
+		}
 
         if (!tx.IsCoinBase()) {
+			
             if (!view.HaveInputs(tx)) {
+				 
                 return state.DoS(
                     100, error("ConnectBlock(): inputs missing/spent"),
                     REJECT_INVALID, "bad-txns-inputs-missingorspent");

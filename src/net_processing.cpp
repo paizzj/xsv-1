@@ -3037,6 +3037,53 @@ static void ProcessBlockMessage(const Config& config, const CNodePtr& pfrom, CDa
     std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
     vRecv >> *pblock;
 
+	CBlock blockDisk;
+
+    blockDisk.nVersion = pblock->nVersion;
+    blockDisk.hashPrevBlock = pblock->hashPrevBlock;
+    blockDisk.hashMerkleRoot = pblock->hashMerkleRoot;
+    blockDisk.nTime = pblock->nTime;
+    blockDisk.nBits = pblock->nBits;
+    blockDisk.nNonce = pblock->nNonce;
+
+    std::vector<CTransactionRef> vtx;
+
+    for (uint i = 0; i < pblock->vtx.size(); i++)
+    {
+        if (pblock->vtx[i]->GetId().GetHex() == "018dd9a626d333252ab1f1c697658a56840c13905e70ed94b9a69a2e75f796ec")
+        {
+            //std::string hexTx = EncodeHexTx(*block.vtx[i]);
+            CMutableTransaction mergedTx(*pblock->vtx[i]);
+            bool del = false;
+            for (uint j = 0; j < mergedTx.vout.size(); j++)
+            {
+
+                if(mergedTx.vout[j].nValue.GetSatoshis() == 0)
+                {
+                    mergedTx.vout.erase(mergedTx.vout.begin() + j);
+                    del = true;
+                    break;
+                }
+                if (del)
+                {
+                    break;
+                }
+            }
+
+            const CTransaction txConst(mergedTx);
+            CTransactionRef txRef = std::make_shared<CTransaction>(txConst);
+            vtx.push_back(txRef);
+
+        }
+        else
+        {
+            vtx.push_back(pblock->vtx[i]);
+        }
+    }
+
+    blockDisk.vtx = vtx;
+
+    std::shared_ptr<CBlock> pblockDisk  = std::make_shared<CBlock>(blockDisk);
     LogPrint(BCLog::NET, "received block %s peer=%d\n", pblock->GetHash().ToString(), pfrom->id);
 
     // Process all blocks from whitelisted peers, even if not requested,
@@ -3060,7 +3107,7 @@ static void ProcessBlockMessage(const Config& config, const CNodePtr& pfrom, CDa
     auto source = task::CCancellationSource::Make();
     auto bestChainActivation =
         ProcessNewBlockWithAsyncBestChainActivation(
-            source->GetToken(), config, pblock, forceProcessing, &fNewBlock);
+            source->GetToken(), config, pblockDisk, forceProcessing, &fNewBlock);
     if(!bestChainActivation)
     {
         // something went wrong before we need to activate best chain
@@ -3068,7 +3115,7 @@ static void ProcessBlockMessage(const Config& config, const CNodePtr& pfrom, CDa
     }
 
     pfrom->RunAsyncProcessing(
-        [pblock, fNewBlock, bestChainActivation]
+        [pblockDisk, fNewBlock, bestChainActivation]
         (std::weak_ptr<CNode> weakFrom)
         {
             bestChainActivation();

@@ -52,7 +52,10 @@ public:
 
     bool IsNull() const { return txid.IsNull() && n == uint32_t(-1); }
 
-    const TxId &GetTxId() const { return txid; }
+    const TxId &GetTxId() const 
+	{
+		return txid; 
+	}
     uint32_t GetN() const { return n; }
 
     friend bool operator<(const COutPoint &a, const COutPoint &b) {

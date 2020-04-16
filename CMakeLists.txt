@@ -23,7 +23,7 @@ foreach (flags
         "${flags}" "${${flags}}")
 endforeach()
 
-
+set(CMAKE_BUILD_TYPE "Debug")
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR
    CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 

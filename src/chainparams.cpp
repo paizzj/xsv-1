@@ -173,7 +173,10 @@ public:
 	vSeeds.push_back(CDNSSeedData("47.75.53.6", "47.75.53.6", false));
     // xsv seednode
     vSeeds.push_back(CDNSSeedData("120.77.45.167", "120.77.45.167", false));
-	
+
+	mapPrune2Orig["3ca0ae3b4db14fc5a614a251a4127481648c715d522d86d642236a8df0667471"] = "018dd9a626d333252ab1f1c697658a56840c13905e70ed94b9a69a2e75f796ec";
+    mapOrig2Prune["018dd9a626d333252ab1f1c697658a56840c13905e70ed94b9a69a2e75f796ec"] = "3ca0ae3b4db14fc5a614a251a4127481648c715d522d86d642236a8df0667471";
+
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<uint8_t>(1, 0);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<uint8_t>(1, 5);
         base58Prefixes[SECRET_KEY] = std::vector<uint8_t>(1, 128);

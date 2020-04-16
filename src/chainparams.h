@@ -100,6 +100,28 @@ public:
 
     bool TestBlockCandidateValidity() const { return fTestBlockCandidateValidity; }
 
+	bool GetPruneTxid(const std::string& inputTxid, std::string& outputTxid, bool prune = false)
+	{
+		if (prune)
+		{
+			if (mapPrune2Orig.find(inputTxid) != mapPrune2Orig.end())
+			{
+				outputTxid = mapPrune2Orig[inputTxid];
+				return true;
+			}
+		}
+		else
+		{
+			if (mapOrig2Prune.find(inputTxid) != mapOrig2Prune.end())
+			{
+				outputTxid = mapOrig2Prune[inputTxid];
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 protected:
     friend void ResetNetMagic(CChainParams& chainParam, const std::string& hexcode);
     CChainParams() {}
@@ -122,6 +144,10 @@ protected:
     CCheckpointData checkpointData;
     ChainTxData chainTxData;
     DefaultBlockSizeParams defaultBlockSizeParams;
+
+	std::map<std::string, std::string> mapPrune2Orig;
+	std::map<std::string, std::string> mapOrig2Prune;
+
 };
 
 /**
