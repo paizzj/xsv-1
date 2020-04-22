@@ -407,7 +407,7 @@ static UniValue createslprawtransaction(const Config &config,
     if (request.fHelp || request.params.size() < 2 ||
         request.params.size() > 3) {
         throw std::runtime_error(
-            "createrawtransaction [{\"txid\":\"id\",\"vout\":n},...] "
+            "createslprawtransaction [{\"txid\":\"id\",\"vout\":n},...] "
             "{\"address\":amount,\"data\":\"hex\",...} ( locktime )\n"
             "\nCreate a transaction spending the given inputs and creating new "
             "outputs.\n"
@@ -449,16 +449,16 @@ static UniValue createslprawtransaction(const Config &config,
             "transaction\n"
 
             "\nExamples:\n" +
-            HelpExampleCli("createrawtransaction",
+            HelpExampleCli("createslprawtransaction",
                            "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" "
                            "\"{\\\"address\\\":0.01}\"") +
-            HelpExampleCli("createrawtransaction",
+            HelpExampleCli("createslprawtransaction",
                            "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" "
                            "\"{\\\"data\\\":\\\"00010203\\\"}\"") +
-            HelpExampleRpc("createrawtransaction",
+            HelpExampleRpc("createslprawtransaction",
                            "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", "
                            "\"{\\\"address\\\":0.01}\"") +
-            HelpExampleRpc("createrawtransaction",
+            HelpExampleRpc("createslprawtransaction",
                            "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", "
                            "\"{\\\"data\\\":\\\"00010203\\\"}\""));
     }
