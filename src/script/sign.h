@@ -83,6 +83,9 @@ struct SignatureData {
 bool ProduceSignature(const Config& config, bool consensus, const BaseSignatureCreator& creator, bool genesisEnabled, bool utxoAfterGenesis,
                       const CScript& scriptPubKey, SignatureData& sigdata);
 
+bool ProduceSlpppSignature(const Config& config, bool consensus, const BaseSignatureCreator& creator, bool genesisEnabled, bool utxoAfterGenesis,
+                      const CScript& scriptPubKey, SignatureData& sigdata);
+
 /** Produce a script signature for a transaction. */
 bool SignSignature(const Config& config, const CKeyStore& keystore, bool genesisEnabled,
                    bool utxoAfterGenesis, const CScript& fromPubKey,
