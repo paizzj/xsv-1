@@ -568,7 +568,7 @@ static UniValue createslppptransaction(const Config &config,
         request.params.size() > 3) {
         throw std::runtime_error(
             "createslppptransaction [{\"txid\":\"id\",\"vout\":n},...] "
-            "[{\"address\":amount,\"script\":\"hex\",\"data\":\"hex\"},...] ( locktime )\n"
+            "[{\"address\":\"xxx\",\"amount\":x.xxx,\"script\":\"hex\"},{\"data\":\"hex\"},...] ( locktime )\n"
             "\nCreate a transaction spending the given inputs and creating new "
             "outputs.\n"
             "Outputs can be addresses or data.\n"
@@ -594,12 +594,12 @@ static UniValue createslppptransaction(const Config &config,
             "json objects\n"
             "     [\n"
             "       {\n"
-            "         \"address\": x.xxx,  (numeric or string, required) The "
-            "key is the bitcoin address, the numeric value (can be string) is "
-            "the " + CURRENCY_UNIT + " amount\n"
-            "         \"script\": \"hex\"    (string, required) The key is "
+            "         \"address\": xxx,    (string, required) The bitcoin address\n"
+            "         \"amount\": x.xxx,   (numeric or string, required) The "
+            "numeric value (can be string) is the " + CURRENCY_UNIT + " amount\n"
+            "         \"script\": \"hex\"  (string, required) The key is "
             "\"script\", the value is hex encoded data\n"
-            "         \"data\": \"hex\"      (string, required) The key is "
+            "         \"data\": \"hex\"    (string, required) The key is "
             "\"data\", the value is hex encoded data\n"
             "       } \n"
             "       ,...\n"
@@ -613,13 +613,7 @@ static UniValue createslppptransaction(const Config &config,
             "\nExamples:\n" +
             HelpExampleCli("createslppptransaction",
                            "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" "
-                           "\"[{\\\"address\\\":0.01}]\"") +
-            HelpExampleCli("createslppptransaction",
-                           "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" "
                            "\"[{\\\"data\\\":\\\"00010203\\\"}]\"") +
-            HelpExampleRpc("createslppptransaction",
-                           "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", "
-                           "\"[{\\\"address\\\":0.01}]\"") +
             HelpExampleRpc("createslppptransaction",
                            "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", "
                            "\"[{\\\"data\\\":\\\"00010203\\\"}]\""));
@@ -712,11 +706,6 @@ static UniValue createslppptransaction(const Config &config,
         if (!IsValidDestination(destination)) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
                 std::string("Invalid Bitcoin address: ") + addr);
-        }
-
-        if (!destinations.insert(destination).second) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER,
-                std::string("Invalid parameter, duplicated address: ") + addr);
         }
 
         const UniValue &o_amount = find_value(o, "amount");
@@ -1729,26 +1718,20 @@ static UniValue signslppptransaction(const Config &config,
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Missing transaction");
     }
 
-    // mergedTx will end up with all the signatures; it starts as a clone of the
-    // rawtx:
     CMutableTransaction mergedTx(txVariants[0]);
 
-    // Fetch previous transactions (inputs):
     CCoinsView viewDummy;
     CCoinsViewCache view(&viewDummy);
     {
         std::shared_lock lock(mempool.smtx);
         CCoinsViewCache &viewChain = *pcoinsTip;
         CCoinsViewMemPool viewMempool(&viewChain, mempool);
-        // Temporarily switch cache backend to db+mempool view.
         view.SetBackend(viewMempool);
 
         for (const CTxIn &txin : mergedTx.vin) {
-            // Load entries from viewChain into view; can fail.
             view.AccessCoin(txin.prevout);
         }
 
-        // Switch back to avoid locking mempool for too long.
         view.SetBackend(viewDummy);
     }
 
@@ -1781,7 +1764,6 @@ static UniValue signslppptransaction(const Config &config,
     }
 #endif
 
-    // Add previous txouts given in the RPC call:
     if (request.params.size() > 1 && !request.params[1].isNull()) {
         UniValue prevTxs = request.params[1].get_array();
         for (size_t idx = 0; idx < prevTxs.size(); idx++) {
@@ -1834,25 +1816,12 @@ static UniValue signslppptransaction(const Config &config,
                     txout.nValue =
                         AmountFromValue(find_value(prevOut, "amount"));
                 } else {
-                    // amount param is required in replay-protected txs.
-                    // Note that we must check for its presence here rather
-                    // than use RPCTypeCheckObj() above, since UniValue::VNUM
-                    // parser incorrectly parses numerics with quotes, eg
-                    // "3.12" as a string when JSON allows it to also parse
-                    // as numeric. And we have to accept numerics with quotes
-                    // because our own dogfood (our rpc results) always
-                    // produces decimal numbers that are quoted
-                    // eg getbalance returns "3.14152" rather than 3.14152
                     throw JSONRPCError(RPC_INVALID_PARAMETER, "Missing amount");
                 }
 
-                // We do not have coin height here. We assume that the coin is about to
-                // be mined using latest active rules.
                 const auto genesisActivationHeight = config.GetGenesisActivationHeight();
                 uint32_t coinHeight = static_cast<uint32_t>(chainActive.Height() + 1);
 
-                // except if we are trying to sign transactions that spends p2sh transaction, which
-                // are non-standard (and therefore cannot be signed) after genesis upgrade
                 if( coinHeight >= genesisActivationHeight && txout.scriptPubKey.IsPayToScriptHash()){
                     coinHeight = genesisActivationHeight - 1;
                 }
@@ -1860,9 +1829,6 @@ static UniValue signslppptransaction(const Config &config,
                 view.AddCoin(out, Coin(txout, coinHeight, false), true, genesisActivationHeight);
             }
 
-            // If redeemScript given and not using the local wallet (private
-            // keys given), add redeemScript to the tempKeystore so it can be
-            // signed:
             if (fGivenKeys && scriptPubKey.IsPayToScriptHash()) {
                 RPCTypeCheckObj(
                     prevOut,
@@ -1920,11 +1886,8 @@ static UniValue signslppptransaction(const Config &config,
         }
     }
 
-    // Script verification errors.
     UniValue vErrors(UniValue::VARR);
 
-    // Use CTransaction for the constant parts of the transaction to avoid
-    // rehashing.
     const CTransaction txConst(mergedTx);
 
     bool genesisEnabled = IsGenesisEnabled(config, chainActive.Height() + 1);
@@ -1997,7 +1960,405 @@ static UniValue signslppptransaction(const Config &config,
     return result;
 }
 
-// clang-format off
+static UniValue createcontracttransaction(const Config &config,
+                                     const JSONRPCRequest &request) {
+    if (request.fHelp || request.params.size() != 2) {
+        throw std::runtime_error(
+            "createcontracttransaction [{\"txid\":\"id\",\"vout\":n},...] "
+            "[{\"address\":[\"xxx\",\"xxx\"],\"amount\":x.xxx,\"script\":\"hex\"},"
+            "{\"data\":\"hex\"},...] \n"
+            "\nCreate a transaction spending the given inputs and creating new "
+            "outputs.\n"
+            "Outputs can be addresses or data.\n"
+            "Returns hex-encoded raw transaction.\n"
+            "Note that the transaction's inputs are not signed, and\n"
+            "it is not stored in the wallet or transmitted to the network.\n"
+
+            "\nArguments:\n"
+            "1. \"inputs\"                (array, required) A json array of "
+            "json objects\n"
+            "     [\n"
+            "       {\n"
+            "         \"txid\":\"id\",    (string, required) The transaction "
+            "id\n"
+            "         \"vout\":n,         (numeric, required) The output "
+            "number\n"
+            "         \"sequence\":n      (numeric, optional) The sequence "
+            "number\n"
+            "       } \n"
+            "       ,...\n"
+            "     ]\n"
+            "2. \"outputs\"                (array, required) A json array of "
+            "json objects\n"
+            "     [\n"
+            "       {\n"
+            "         \"address\": xxx,    (string, required) The bitcoin address\n"
+            "         \"amount\": x.xxx,   (numeric or string, required) The "
+            "numeric value (can be string) is the " + CURRENCY_UNIT + " amount\n"
+            "         \"script\": \"hex\"    (string, required) The key is "
+            "\"script\", the value is hex encoded data\n"
+            "         \"data\": \"hex\"      (string, required) The key is "
+            "\"data\", the value is hex encoded data\n"
+            "       } \n"
+            "       ,...\n"
+            "     ]\n"
+            "\nResult:\n"
+            "\"transaction\"              (string) hex string of the "
+            "transaction\n"
+
+            "\nExamples:\n" +
+            HelpExampleCli("createcontracttransaction",
+                           "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" "
+                           "\"[{\\\"data\\\":\\\"03010203\\\"}]\"") +
+            HelpExampleRpc("createcontracttransaction",
+                           "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", "
+                           "\"[{\\\"data\\\":\\\"03010203\\\"}]\""));
+    }
+
+    RPCTypeCheck(request.params,
+                 {UniValue::VARR, UniValue::VARR}, true);
+    if (request.params[0].isNull() || request.params[1].isNull()) {
+        throw JSONRPCError(
+            RPC_INVALID_PARAMETER,
+            "Invalid parameter, arguments 1 and 2 must be non-null");
+    }
+
+    UniValue inputs = request.params[0].get_array();
+    UniValue outputs = request.params[1].get_array();
+
+    CMutableTransaction rawTx;
+
+    for (size_t idx = 0; idx < inputs.size(); idx++) {
+        const UniValue &input = inputs[idx];
+        const UniValue &o = input.get_obj();
+
+        uint256 txid = ParseHashO(o, "txid");
+
+        const UniValue &vout_v = find_value(o, "vout");
+        if (!vout_v.isNum()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "Invalid parameter, missing vout key");
+        }
+
+        int nOutput = vout_v.get_int();
+        if (nOutput < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "Invalid parameter, vout must be positive");
+        }
+
+        uint32_t nSequence =
+            (rawTx.nLockTime ? std::numeric_limits<uint32_t>::max() - 1
+                             : std::numeric_limits<uint32_t>::max());
+
+        // Set the sequence number if passed in the parameters object.
+        const UniValue &sequenceObj = find_value(o, "sequence");
+        if (sequenceObj.isNum()) {
+            int64_t seqNr64 = sequenceObj.get_int64();
+            if (seqNr64 < 0 || seqNr64 > std::numeric_limits<uint32_t>::max()) {
+                throw JSONRPCError(
+                    RPC_INVALID_PARAMETER,
+                    "Invalid parameter, sequence number is out of range");
+            }
+
+            nSequence = uint32_t(seqNr64);
+        }
+
+        CTxIn in(COutPoint(txid, nOutput), CScript(), nSequence);
+        rawTx.vin.push_back(in);
+    }
+
+    for (size_t idx = 0; idx < outputs.size(); idx++) {
+        const UniValue &output = outputs[idx];
+        const UniValue &o = output.get_obj();
+
+        const UniValue &o_address = find_value(o, "address");
+        if (o_address.isNull()) {
+            const UniValue &o_data = find_value(o, "data");
+            if (o_data.isNull()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                      "Invalid parameter, invalid vout");
+            } else {
+                std::vector<uint8_t> data = ParseHexV(o_data.getValStr(), "Data");
+                CTxOut out(Amount(0), CScript() << OP_FALSE << OP_RETURN << data);
+                rawTx.vout.push_back(out);
+                continue;
+            }
+        }
+
+        if (o_address.size() > 2 || o_address.size() < 1) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "Invalid parameter, address size > 2 or < 1");
+        }
+
+        if (o_address.size() == 2) {
+            CScript mulScript = CScript() << OP_IF;
+
+            std::string addr1 = o_address[0].getValStr();
+            CTxDestination destination1 = DecodeDestination(addr1, config.GetChainParams());
+            std::string addr2 = o_address[1].getValStr();
+            CTxDestination destination2 = DecodeDestination(addr2, config.GetChainParams());
+
+            if (!IsValidDestination(destination1) || !IsValidDestination(destination2)) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                    std::string("Invalid Bitcoin address"));
+            }
+
+            if (addr1 == addr2) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                    std::string("Invalid parameter, duplicated address: ") + addr2);
+            }
+
+            mulScript += GetScriptForDestination(destination1);
+            mulScript << OP_ELSE;
+            mulScript += GetScriptForDestination(destination2);
+            mulScript << OP_ENDIF;
+
+            const UniValue &o_amount = find_value(o, "amount");
+            if (o_amount.isNull()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                    "Invalid parameter, invalid vout");
+            } else {
+                const UniValue &o_script = find_value(o, "script");
+                Amount nAmount = AmountFromValue(o_amount.getValStr());
+                if (o_script.isNull()) {
+                    CTxOut out(nAmount, mulScript);
+                    rawTx.vout.push_back(out);
+                } else {
+                    std::vector<uint8_t> sc = ParseHexV("6a" + o_script.getValStr(), "Data");
+                    CScript scScript(sc.begin(), sc.end());
+                    CTxOut out(nAmount, mulScript + scScript);
+                    rawTx.vout.push_back(out);
+                }
+            }
+        }
+
+        if (o_address.size() == 1) {
+            std::string addr = o_address[0].getValStr();
+            CTxDestination destination = DecodeDestination(addr, config.GetChainParams());
+
+            if (!IsValidDestination(destination)) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                    std::string("Invalid Bitcoin address") + addr);
+            }
+
+            const UniValue &o_amount = find_value(o, "amount");
+            if (o_amount.isNull()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                    "Invalid parameter, invalid vout");
+            } else {
+                Amount nAmount = AmountFromValue(o_amount.getValStr());
+                CTxOut out(nAmount, GetScriptForDestination(destination));
+                rawTx.vout.push_back(out);
+            }
+        }
+    }
+
+    return EncodeHexTx(CTransaction(rawTx));
+}
+
+static UniValue signcontracttransaction(const Config &config,
+                                   const JSONRPCRequest &request) {
+#ifdef ENABLE_WALLET
+    CWallet *const pwallet = GetWalletForJSONRPCRequest(request);
+#endif
+
+    if (request.fHelp || request.params.size() != 2) {
+        throw std::runtime_error(
+            "signcontracttransaction \"hexstring\" role\n"
+            "\nSign inputs for raw transaction (serialized, hex-encoded).\n"
+            "The second optional argument (may be null) is an array of "
+            "previous transaction outputs that\n"
+            "this transaction depends on but may not yet be in the block "
+            "chain.\n"
+            "The third optional argument (may be null) is an array of "
+            "base58-encoded private\n"
+            "keys that, if given, will be the only keys used to sign the "
+            "transaction.\n"
+#ifdef ENABLE_WALLET
+            + HelpRequiringPassphrase(pwallet) +
+            "\n"
+#endif
+
+            "\nArguments:\n"
+            "1. \"hexstring\"     (string, required) The transaction hex "
+            "string\n"
+            "2. \"role\"          (int, required) The role\n"
+
+            "\nResult:\n"
+            "{\n"
+            "  \"hex\" : \"value\",           (string) The hex-encoded raw "
+            "transaction with signature(s)\n"
+            "  \"complete\" : true|false,   (boolean) If the transaction has a "
+            "complete set of signatures\n"
+            "  \"errors\" : [                 (json array of objects) Script "
+            "verification errors (if there are any)\n"
+            "    {\n"
+            "      \"txid\" : \"hash\",           (string) The hash of the "
+            "referenced, previous transaction\n"
+            "      \"vout\" : n,                (numeric) The index of the "
+            "output to spent and used as input\n"
+            "      \"scriptSig\" : \"hex\",       (string) The hex-encoded "
+            "signature script\n"
+            "      \"sequence\" : n,            (numeric) Script sequence "
+            "number\n"
+            "      \"error\" : \"text\"           (string) Verification or "
+            "signing error related to the input\n"
+            "    }\n"
+            "    ,...\n"
+            "  ]\n"
+            "}\n"
+
+            "\nExamples:\n" +
+            HelpExampleCli("signcontracttransaction", "\"myhex\" 1") +
+            HelpExampleRpc("signcontracttransaction", "\"myhex\" 1"));
+    }
+
+#ifdef ENABLE_WALLET
+    LOCK2(cs_main, pwallet ? &pwallet->cs_wallet : nullptr);
+#else
+    LOCK(cs_main);
+#endif
+    RPCTypeCheck(
+        request.params,
+        {UniValue::VSTR, UniValue::VSTR}, true);
+
+    std::vector<uint8_t> txData(ParseHexV(request.params[0], "argument 1"));
+    CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
+    std::vector<CMutableTransaction> txVariants;
+    while (!ssData.empty()) {
+        try {
+            CMutableTransaction tx;
+            ssData >> tx;
+            txVariants.push_back(tx);
+        } catch (const std::exception &) {
+            throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+        }
+    }
+
+    if (txVariants.empty()) {
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Missing transaction");
+    }
+
+    CMutableTransaction mergedTx(txVariants[0]);
+
+    CCoinsView viewDummy;
+    CCoinsViewCache view(&viewDummy);
+    {
+        std::shared_lock lock(mempool.smtx);
+        CCoinsViewCache &viewChain = *pcoinsTip;
+        CCoinsViewMemPool viewMempool(&viewChain, mempool);
+        view.SetBackend(viewMempool);
+
+        for (const CTxIn &txin : mergedTx.vin) {
+            view.AccessCoin(txin.prevout);
+        }
+
+        view.SetBackend(viewDummy);
+    }
+
+    bool fGivenKeys = false;
+    CBasicKeyStore tempKeystore;
+    if (request.params.size() > 2 && !request.params[2].isNull()) {
+    }
+#ifdef ENABLE_WALLET
+    else if (pwallet) {
+        EnsureWalletIsUnlocked(pwallet);
+    }
+#endif
+
+    int role = false;
+    if (request.params.size() > 1 && !request.params[1].isNull()) {
+        std::string str = request.params[1].get_str();
+        if (str == "0") {
+            role = false;
+        } else {
+            role = true;
+        }
+    }
+
+#ifdef ENABLE_WALLET
+    const CKeyStore &keystore =
+        ((fGivenKeys || !pwallet) ? tempKeystore : *pwallet);
+#else
+    const CKeyStore &keystore = tempKeystore;
+#endif
+
+    SigHashType sigHashType = SigHashType().withForkId();
+
+    UniValue vErrors(UniValue::VARR);
+
+    const CTransaction txConst(mergedTx);
+
+    bool genesisEnabled = IsGenesisEnabled(config, chainActive.Height() + 1);
+
+    // Sign what we can:
+    for (size_t i = 0; i < mergedTx.vin.size(); i++) {
+        CTxIn &txin = mergedTx.vin[i];
+        const Coin &coin = view.AccessCoin(txin.prevout);
+        if (coin.IsSpent()) {
+            TxInErrorToJSON(txin, vErrors, "Input not found or already spent");
+            continue;
+        }
+
+        const CScript &prevPubKey = coin.GetTxOut().scriptPubKey;
+        const Amount amount = coin.GetTxOut().nValue;
+
+        bool utxoAfterGenesis = IsGenesisEnabled(config, coin, chainActive.Height() + 1);
+
+        SignatureData sigdata;
+        // Only sign SIGHASH_SINGLE if there's a corresponding output:
+        if ((sigHashType.getBaseType() != BaseSigHashType::SINGLE) ||
+            (i < mergedTx.vout.size())) {
+            ProduceContractSignature(config, true, MutableTransactionSignatureCreator(
+                                 &keystore, &mergedTx, i, amount, sigHashType),
+                             genesisEnabled, utxoAfterGenesis, prevPubKey, sigdata, role);
+        }
+
+        // ... and merge in other signatures:
+        for (const CMutableTransaction &txv : txVariants) {
+            if (txv.vin.size() > i) {
+                sigdata = CombineSignatures(
+                    config,
+                    true,
+                    prevPubKey,
+                    TransactionSignatureChecker(&txConst, i, amount), sigdata,
+                    DataFromTransaction(txv, i),
+                    utxoAfterGenesis);
+            }
+        }
+
+        UpdateTransaction(mergedTx, i, sigdata);
+
+        ScriptError serror = SCRIPT_ERR_OK;
+        auto source = task::CCancellationSource::Make();
+        auto res =
+            VerifyScript(
+                config,
+                true,
+                source->GetToken(),
+                txin.scriptSig,
+                prevPubKey,
+                StandardScriptVerifyFlags(genesisEnabled, utxoAfterGenesis),
+                TransactionSignatureChecker(&txConst, i, amount),
+                &serror);
+        if (!res.value())
+        {
+            TxInErrorToJSON(txin, vErrors, ScriptErrorString(serror));
+        }
+    }
+
+    bool fComplete = vErrors.empty();
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("hex", EncodeHexTx(CTransaction(mergedTx))));
+    result.push_back(Pair("complete", fComplete));
+    if (!vErrors.empty()) {
+        result.push_back(Pair("errors", vErrors));
+    }
+
+    return result;
+}
+
 static const CRPCCommand commands[] = {
     //  category            name                      actor (function)        okSafeMode
     //  ------------------- ------------------------  ----------------------  ----------
@@ -2009,7 +2370,9 @@ static const CRPCCommand commands[] = {
     { "rawtransactions",    "signrawtransaction",           signrawtransaction,         false, {"hexstring","prevtxs","privkeys","sighashtype"} }, /* uses wallet if enabled */
     { "rawtransactions",    "createslprawtransaction",      createslprawtransaction,    true,  {"inputs","outputs","locktime"} },
     { "rawtransactions",    "createslppptransaction",       createslppptransaction,     true,  {"inputs","outputs","locktime"} },
+    { "rawtransactions",    "createcontracttransaction",    createcontracttransaction,  true,  {"inputs","outputs"} },
     { "rawtransactions",    "signslppptransaction",         signslppptransaction,       false, {"hexstring","prevtxs","privkeys","sighashtype"} },
+    { "rawtransactions",    "signcontracttransaction",      signcontracttransaction,    false, {"hexstring","role"} },
     { "blockchain",         "gettxoutproof",          gettxoutproof,          true,  {"txids", "blockhash"} },
     { "blockchain",         "verifytxoutproof",       verifytxoutproof,       true,  {"proof"} },
 };

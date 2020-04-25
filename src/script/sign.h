@@ -86,6 +86,9 @@ bool ProduceSignature(const Config& config, bool consensus, const BaseSignatureC
 bool ProduceSlpppSignature(const Config& config, bool consensus, const BaseSignatureCreator& creator, bool genesisEnabled, bool utxoAfterGenesis,
                       const CScript& scriptPubKey, SignatureData& sigdata);
 
+bool ProduceContractSignature(const Config& config, bool consensus, const BaseSignatureCreator& creator, bool genesisEnabled, bool utxoAfterGenesis,
+                      const CScript& scriptPubKey, SignatureData& sigdata, bool role);
+
 /** Produce a script signature for a transaction. */
 bool SignSignature(const Config& config, const CKeyStore& keystore, bool genesisEnabled,
                    bool utxoAfterGenesis, const CScript& fromPubKey,
