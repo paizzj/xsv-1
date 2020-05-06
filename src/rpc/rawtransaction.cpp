@@ -402,166 +402,6 @@ static UniValue verifytxoutproof(const Config &config,
     return res;
 }
 
-static UniValue createslprawtransaction(const Config &config,
-                                     const JSONRPCRequest &request) {
-    if (request.fHelp || request.params.size() < 2 ||
-        request.params.size() > 3) {
-        throw std::runtime_error(
-            "createslprawtransaction [{\"txid\":\"id\",\"vout\":n},...] "
-            "{\"address\":amount,\"data\":\"hex\",...} ( locktime )\n"
-            "\nCreate a transaction spending the given inputs and creating new "
-            "outputs.\n"
-            "Outputs can be addresses or data.\n"
-            "Returns hex-encoded raw transaction.\n"
-            "Note that the transaction's inputs are not signed, and\n"
-            "it is not stored in the wallet or transmitted to the network.\n"
-
-            "\nArguments:\n"
-            "1. \"inputs\"                (array, required) A json array of "
-            "json objects\n"
-            "     [\n"
-            "       {\n"
-            "         \"txid\":\"id\",    (string, required) The transaction "
-            "id\n"
-            "         \"vout\":n,         (numeric, required) The output "
-            "number\n"
-            "         \"sequence\":n      (numeric, optional) The sequence "
-            "number\n"
-            "       } \n"
-            "       ,...\n"
-            "     ]\n"
-            "2. \"outputs\"               (object, required) a json object "
-            "with outputs\n"
-            "    {\n"
-            "      \"address\": x.xxx,    (numeric or string, required) The "
-            "key is the bitcoin address, the numeric value (can be string) is "
-            "the " +
-            CURRENCY_UNIT +
-            " amount\n"
-            "      \"data\": \"hex\"      (string, required) The key is "
-            "\"data\", the value is hex encoded data\n"
-            "      ,...\n"
-            "    }\n"
-            "3. locktime                  (numeric, optional, default=0) Raw "
-            "locktime. Non-0 value also locktime-activates inputs\n"
-            "\nResult:\n"
-            "\"transaction\"              (string) hex string of the "
-            "transaction\n"
-
-            "\nExamples:\n" +
-            HelpExampleCli("createslprawtransaction",
-                           "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" "
-                           "\"{\\\"address\\\":0.01}\"") +
-            HelpExampleCli("createslprawtransaction",
-                           "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" "
-                           "\"{\\\"data\\\":\\\"00010203\\\"}\"") +
-            HelpExampleRpc("createslprawtransaction",
-                           "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", "
-                           "\"{\\\"address\\\":0.01}\"") +
-            HelpExampleRpc("createslprawtransaction",
-                           "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", "
-                           "\"{\\\"data\\\":\\\"00010203\\\"}\""));
-    }
-
-    RPCTypeCheck(request.params,
-                 {UniValue::VARR, UniValue::VOBJ, UniValue::VNUM}, true);
-    if (request.params[0].isNull() || request.params[1].isNull()) {
-        throw JSONRPCError(
-            RPC_INVALID_PARAMETER,
-            "Invalid parameter, arguments 1 and 2 must be non-null");
-    }
-
-    UniValue inputs = request.params[0].get_array();
-    UniValue sendTo = request.params[1].get_obj();
-
-    CMutableTransaction rawTx;
-
-    if (request.params.size() > 2 && !request.params[2].isNull()) {
-        int64_t nLockTime = request.params[2].get_int64();
-        if (nLockTime < 0 || nLockTime > std::numeric_limits<uint32_t>::max()) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER,
-                               "Invalid parameter, locktime out of range");
-        }
-
-        rawTx.nLockTime = nLockTime;
-    }
-
-    for (size_t idx = 0; idx < inputs.size(); idx++) {
-        const UniValue &input = inputs[idx];
-        const UniValue &o = input.get_obj();
-
-        uint256 txid = ParseHashO(o, "txid");
-
-        const UniValue &vout_v = find_value(o, "vout");
-        if (!vout_v.isNum()) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER,
-                               "Invalid parameter, missing vout key");
-        }
-
-        int nOutput = vout_v.get_int();
-        if (nOutput < 0) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER,
-                               "Invalid parameter, vout must be positive");
-        }
-
-        uint32_t nSequence =
-            (rawTx.nLockTime ? std::numeric_limits<uint32_t>::max() - 1
-                             : std::numeric_limits<uint32_t>::max());
-
-        // Set the sequence number if passed in the parameters object.
-        const UniValue &sequenceObj = find_value(o, "sequence");
-        if (sequenceObj.isNum()) {
-            int64_t seqNr64 = sequenceObj.get_int64();
-            if (seqNr64 < 0 || seqNr64 > std::numeric_limits<uint32_t>::max()) {
-                throw JSONRPCError(
-                    RPC_INVALID_PARAMETER,
-                    "Invalid parameter, sequence number is out of range");
-            }
-
-            nSequence = uint32_t(seqNr64);
-        }
-
-        CTxIn in(COutPoint(txid, nOutput), CScript(), nSequence);
-        rawTx.vin.push_back(in);
-    }
-
-    std::set<CTxDestination> destinations;
-    std::vector<std::string> addrList = sendTo.getKeys();
-    for (const std::string &name_ : addrList) {
-        if (name_ == "data") {
-            std::string strData = "006a" + sendTo[name_].getValStr();
-            std::vector<uint8_t> data =
-                ParseHexV(strData, "Data");
-            CScript dataScript(data.begin(), data.end());
-            CTxOut out(Amount(0), dataScript);//CScript() << OP_FALSE << OP_RETURN << dataScript);
-            rawTx.vout.push_back(out);
-        } else {
-            CTxDestination destination =
-                DecodeDestination(name_, config.GetChainParams());
-            if (!IsValidDestination(destination)) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
-                                   std::string("Invalid Bitcoin address: ") +
-                                       name_);
-            }
-
-            if (!destinations.insert(destination).second) {
-                throw JSONRPCError(
-                    RPC_INVALID_PARAMETER,
-                    std::string("Invalid parameter, duplicated address: ") +
-                        name_);
-            }
-
-            CScript scriptPubKey = GetScriptForDestination(destination);
-            Amount nAmount = AmountFromValue(sendTo[name_]);
-
-            CTxOut out(nAmount, scriptPubKey);
-            rawTx.vout.push_back(out);
-        }
-    }
-
-    return EncodeHexTx(CTransaction(rawTx));
-}
-
 static UniValue createslppptransaction(const Config &config,
                                      const JSONRPCRequest &request) {
     if (request.fHelp || request.params.size() < 2 ||
@@ -2078,8 +1918,9 @@ static UniValue createcontracttransaction(const Config &config,
                 throw JSONRPCError(RPC_INVALID_PARAMETER,
                       "Invalid parameter, invalid vout");
             } else {
-                std::vector<uint8_t> data = ParseHexV(o_data.getValStr(), "Data");
-                CTxOut out(Amount(0), CScript() << OP_FALSE << OP_RETURN << data);
+                std::vector<uint8_t> data = ParseHexV("006a" + o_data.getValStr(), "Data");
+                CScript dataScript(data.begin(), data.end());
+                CTxOut out(Amount(0), dataScript);
                 rawTx.vout.push_back(out);
                 continue;
             }
@@ -2368,7 +2209,6 @@ static const CRPCCommand commands[] = {
     { "rawtransactions",    "decodescript",                 decodescript,               true,  {"hexstring"} },
     { "rawtransactions",    "sendrawtransaction",           sendrawtransaction,         false, {"hexstring","allowhighfees","dontcheckfee"} },
     { "rawtransactions",    "signrawtransaction",           signrawtransaction,         false, {"hexstring","prevtxs","privkeys","sighashtype"} }, /* uses wallet if enabled */
-    { "rawtransactions",    "createslprawtransaction",      createslprawtransaction,    true,  {"inputs","outputs","locktime"} },
     { "rawtransactions",    "createslppptransaction",       createslppptransaction,     true,  {"inputs","outputs","locktime"} },
     { "rawtransactions",    "createcontracttransaction",    createcontracttransaction,  true,  {"inputs","outputs"} },
     { "rawtransactions",    "signslppptransaction",         signslppptransaction,       false, {"hexstring","prevtxs","privkeys","sighashtype"} },
