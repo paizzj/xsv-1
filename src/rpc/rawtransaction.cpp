@@ -2200,6 +2200,215 @@ static UniValue signcontracttransaction(const Config &config,
     return result;
 }
 
+static UniValue createdrivetx(const Config &config,
+                                     const JSONRPCRequest &request) {
+    if (request.fHelp || request.params.size() != 2) {
+        throw std::runtime_error(
+            "createcontracttransaction [{\"txid\":\"id\",\"vout\":n},...] "
+            "[{\"address\":[\"xxx\",\"xxx\"],\"amount\":x.xxx,\"metadata\":\"hex\"},"
+            "{\"data\":\"hex\"},...] \n"
+            "\nCreate a transaction spending the given inputs and creating new "
+            "outputs.\n"
+            "Outputs can be addresses or data.\n"
+            "Returns hex-encoded raw transaction.\n"
+            "Note that the transaction's inputs are not signed, and\n"
+            "it is not stored in the wallet or transmitted to the network.\n"
+
+            "\nArguments:\n"
+            "1. \"inputs\"                (array, required) A json array of "
+            "json objects\n"
+            "     [\n"
+            "       {\n"
+            "         \"txid\":\"id\",    (string, required) The transaction "
+            "id\n"
+            "         \"vout\":n,         (numeric, required) The output "
+            "number\n"
+            "         \"sequence\":n      (numeric, optional) The sequence "
+            "number\n"
+            "       } \n"
+            "       ,...\n"
+            "     ]\n"
+            "2. \"outputs\"                (array, required) A json array of "
+            "json objects\n"
+            "     [\n"
+            "       {\n"
+            "         \"address\": xxx,    (string, required) The bitcoin address\n"
+            "         \"amount\": x.xxx,   (numeric or string, required) The "
+            "numeric value (can be string) is the " + CURRENCY_UNIT + " amount\n"
+            "         \"metadata\": \"hex\"    (string, required) The key is "
+            "\"metadata\", the value is hex encoded data\n"
+            "         \"data\": \"hex\"      (string, required) The key is "
+            "\"data\", the value is hex encoded data\n"
+            "       } \n"
+            "       ,...\n"
+            "     ]\n"
+            "\nResult:\n"
+            "\"transaction\"              (string) hex string of the "
+            "transaction\n"
+
+            "\nExamples:\n" +
+            HelpExampleCli("createdrivetx",
+                           "\"[{\\\"txid\\\":\\\"myid\",\\\"vout\\\":0}] " 
+                           "\"[{\\\"address\\\":[\\\"xxx\\\",\\\"xxx\\\"],\\\"amount\\\":x.xx,\\\"metadata\\\":\\\"hex\\\"},"
+                           "{\\\"address\\\":[\\\"xxx\\\"],\\\"amount\\\":x.xx,\\\"metadata\":\\\"hex\\\"},"
+                           "{\\\"address\\\":[\\\"xxx\\\"],\\\"amount\\\":x.xx},{\\\"data\\\":\\\"hex\\\"}]\"") +
+            HelpExampleRpc("createdrivetx",
+                           "\"[{\\\"address\\\":[\\\"xxx\\\",\\\"xxx\\\"],\\\"amount\\\":x.xx,\\\"metadata\\\":\\\"hex\\\"},"
+                           "{\\\"address\\\":[\\\"xxx\\\"],\\\"amount\\\":x.xx,\\\"metadata\":\\\"hex\\\"},"
+                           "{\\\"address\\\":[\\\"xxx\\\"],\\\"amount\\\":x.xx},{\\\"data\\\":\\\"hex\\\"}]\"")); 
+    }
+
+    RPCTypeCheck(request.params,
+                 {UniValue::VARR, UniValue::VARR}, true);
+    if (request.params[0].isNull() || request.params[1].isNull()) {
+        throw JSONRPCError(
+            RPC_INVALID_PARAMETER,
+            "Invalid parameter, arguments 1 and 2 must be non-null");
+    }
+
+    UniValue inputs = request.params[0].get_array();
+    UniValue outputs = request.params[1].get_array();
+
+    CMutableTransaction rawTx;
+
+    for (size_t idx = 0; idx < inputs.size(); idx++) {
+        const UniValue &input = inputs[idx];
+        const UniValue &o = input.get_obj();
+
+        uint256 txid = ParseHashO(o, "txid");
+
+        const UniValue &vout_v = find_value(o, "vout");
+        if (!vout_v.isNum()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "Invalid parameter, missing vout key");
+        }
+
+        int nOutput = vout_v.get_int();
+        if (nOutput < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "Invalid parameter, vout must be positive");
+        }
+
+        uint32_t nSequence =
+            (rawTx.nLockTime ? std::numeric_limits<uint32_t>::max() - 1
+                             : std::numeric_limits<uint32_t>::max());
+
+        // Set the sequence number if passed in the parameters object.
+        const UniValue &sequenceObj = find_value(o, "sequence");
+        if (sequenceObj.isNum()) {
+            int64_t seqNr64 = sequenceObj.get_int64();
+            if (seqNr64 < 0 || seqNr64 > std::numeric_limits<uint32_t>::max()) {
+                throw JSONRPCError(
+                    RPC_INVALID_PARAMETER,
+                    "Invalid parameter, sequence number is out of range");
+            }
+
+            nSequence = uint32_t(seqNr64);
+        }
+
+        CTxIn in(COutPoint(txid, nOutput), CScript(), nSequence);
+        rawTx.vin.push_back(in);
+    }
+
+    for (size_t idx = 0; idx < outputs.size(); idx++) {
+        const UniValue &output = outputs[idx];
+        const UniValue &o = output.get_obj();
+
+        const UniValue &o_address = find_value(o, "address");
+        if (o_address.isNull()) {
+            const UniValue &o_data = find_value(o, "data");
+            if (o_data.isNull()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                      "Invalid parameter, invalid vout");
+            } else {
+                std::vector<uint8_t> data = ParseHexV("006a" + o_data.getValStr(), "Data");
+                CScript dataScript(data.begin(), data.end());
+                CTxOut out(Amount(0), dataScript);
+                rawTx.vout.push_back(out);
+                continue;
+            }
+        }
+
+        if (o_address.size() > 2 || o_address.size() < 1) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "Invalid parameter, invalid address size");
+        }
+
+        if (o_address.size() == 2) {
+            CScript mulScript = CScript() << OP_IF;
+
+            std::string addr1 = o_address[0].getValStr();
+            CTxDestination destination1 = DecodeDestination(addr1, config.GetChainParams());
+            std::string addr2 = o_address[1].getValStr();
+            CTxDestination destination2 = DecodeDestination(addr2, config.GetChainParams());
+
+            if (!IsValidDestination(destination1) || !IsValidDestination(destination2)) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                    std::string("Invalid Bitcoin address"));
+            }
+
+            if (addr1 == addr2) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                    std::string("Invalid parameter, duplicated address: ") + addr2);
+            }
+
+            mulScript += GetScriptForDestination(destination1);
+            mulScript << OP_ELSE;
+            mulScript += GetScriptForDestination(destination2);
+            mulScript << OP_ENDIF;
+
+            const UniValue &o_amount = find_value(o, "amount");
+            if (o_amount.isNull()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                    "Invalid parameter, invalid vout");
+            } else {
+                const UniValue &o_script = find_value(o, "metadata");
+                Amount nAmount = AmountFromValue(o_amount.getValStr());
+                if (o_script.isNull()) {
+                    CTxOut out(nAmount, mulScript);
+                    rawTx.vout.push_back(out);
+                } else {
+                    std::vector<uint8_t> sc = ParseHexV("6a" + o_script.getValStr(), "Data");
+                    CScript scScript(sc.begin(), sc.end());
+                    CTxOut out(nAmount, mulScript + scScript);
+                    rawTx.vout.push_back(out);
+                }
+            }
+        }
+
+        if (o_address.size() == 1) {
+            std::string addr = o_address[0].getValStr();
+            CTxDestination destination = DecodeDestination(addr, config.GetChainParams());
+
+            if (!IsValidDestination(destination)) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                    std::string("Invalid Bitcoin address") + addr);
+            }
+
+            const UniValue &o_amount = find_value(o, "amount");
+            if (o_amount.isNull()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                    "Invalid parameter, invalid vout");
+            } else {
+                const UniValue &o_script = find_value(o, "metadata");
+                Amount nAmount = AmountFromValue(o_amount.getValStr());
+                CScript scriptPubKey = GetScriptForDestination(destination);
+                if (o_script.isNull()) {
+                    CTxOut out(nAmount, scriptPubKey);
+                    rawTx.vout.push_back(out);
+                } else {
+                    std::vector<uint8_t> sc = ParseHexV("6a" + o_script.getValStr(), "Data");
+                    CScript scScript(sc.begin(), sc.end());
+                    CTxOut out(nAmount, scriptPubKey + scScript);
+                    rawTx.vout.push_back(out);
+                }
+            }
+        }
+    }
+
+    return EncodeHexTx(CTransaction(rawTx));
+}
+
 static const CRPCCommand commands[] = {
     //  category            name                      actor (function)        okSafeMode
     //  ------------------- ------------------------  ----------------------  ----------
@@ -2211,6 +2420,7 @@ static const CRPCCommand commands[] = {
     { "rawtransactions",    "signrawtransaction",           signrawtransaction,         false, {"hexstring","prevtxs","privkeys","sighashtype"} }, /* uses wallet if enabled */
     { "rawtransactions",    "createslppptransaction",       createslppptransaction,     true,  {"inputs","outputs","locktime"} },
     { "rawtransactions",    "createcontracttransaction",    createcontracttransaction,  true,  {"inputs","outputs"} },
+    { "rawtransactions",    "createdrivetx",                createdrivetx,              true,  {"inputs","outputs"} },
     { "rawtransactions",    "signslppptransaction",         signslppptransaction,       false, {"hexstring","prevtxs","privkeys","sighashtype"} },
     { "rawtransactions",    "signcontracttransaction",      signcontracttransaction,    false, {"hexstring","role"} },
     { "blockchain",         "gettxoutproof",          gettxoutproof,          true,  {"txids", "blockhash"} },
