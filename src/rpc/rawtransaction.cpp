@@ -2204,7 +2204,7 @@ static UniValue createdrivetx(const Config &config,
                                      const JSONRPCRequest &request) {
     if (request.fHelp || request.params.size() != 2) {
         throw std::runtime_error(
-            "createcontracttransaction [{\"txid\":\"id\",\"vout\":n},...] "
+            "createdrivetx [{\"txid\":\"id\",\"vout\":n},...] "
             "[{\"address\":[\"xxx\",\"xxx\"],\"amount\":x.xxx,\"metadata\":\"hex\"},"
             "{\"data\":\"hex\"},...] \n"
             "\nCreate a transaction spending the given inputs and creating new "
