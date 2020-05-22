@@ -562,7 +562,8 @@ static UniValue createslppptransaction(const Config &config,
                 rawTx.vout.push_back(out);
             } else {
                 std::vector<uint8_t> data = ParseHexV(o_script.getValStr(), "Data");
-                CTxOut out(Amount(0), CScript() << OP_FALSE << OP_RETURN << data);
+                CScript metadata = CScript() << OP_RETURN << data;
+                CTxOut out(Amount(0), scriptPubKey + metadata);
                 rawTx.vout.push_back(out);
             }
         }
@@ -1963,8 +1964,8 @@ static UniValue createcontracttransaction(const Config &config,
                     CTxOut out(nAmount, mulScript);
                     rawTx.vout.push_back(out);
                 } else {
-                    std::vector<uint8_t> sc = ParseHexV("6a" + o_script.getValStr(), "Data");
-                    CScript scScript(sc.begin(), sc.end());
+                    std::vector<uint8_t> metadata = ParseHexV(o_script.getValStr(), "Data");
+                    CScript scScript = CScript() << OP_RETURN << metadata;
                     CTxOut out(nAmount, mulScript + scScript);
                     rawTx.vout.push_back(out);
                 }
@@ -2371,8 +2372,8 @@ static UniValue createdrivetx(const Config &config,
                     CTxOut out(nAmount, mulScript);
                     rawTx.vout.push_back(out);
                 } else {
-                    std::vector<uint8_t> sc = ParseHexV("6a" + o_script.getValStr(), "Data");
-                    CScript scScript(sc.begin(), sc.end());
+                    std::vector<uint8_t> metadata = ParseHexV(o_script.getValStr(), "Data");
+                    CScript scScript = CScript() << OP_RETURN << metadata;
                     CTxOut out(nAmount, mulScript + scScript);
                     rawTx.vout.push_back(out);
                 }
@@ -2400,8 +2401,8 @@ static UniValue createdrivetx(const Config &config,
                     CTxOut out(nAmount, scriptPubKey);
                     rawTx.vout.push_back(out);
                 } else {
-                    std::vector<uint8_t> sc = ParseHexV("6a" + o_script.getValStr(), "Data");
-                    CScript scScript(sc.begin(), sc.end());
+                    std::vector<uint8_t> metadata = ParseHexV(o_script.getValStr(), "Data");
+                    CScript scScript = CScript() << OP_RETURN << metadata;
                     CTxOut out(nAmount, scriptPubKey + scScript);
                     rawTx.vout.push_back(out);
                 }
