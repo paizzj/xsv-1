@@ -194,6 +194,58 @@ static bool SignSlpppStep(const BaseSignatureCreator &creator,
     }
 }
 
+static bool SignMultiStep(const BaseSignatureCreator &creator,
+                     bool utxoAfterGenesis,
+                     const CScript &scriptPubKey,
+                     std::vector<valtype> &ret,
+                     txnouttype &whichTypeRet, const CScript &sc) {
+    CScript scriptRet;
+    uint160 h160;
+    ret.clear();
+
+    std::vector<valtype> vSolutions;
+    if (!Solver(sc, utxoAfterGenesis, whichTypeRet, vSolutions)) {
+        return false;
+    }
+
+    CKeyID keyID;
+    switch (whichTypeRet) {
+        case TX_NONSTANDARD:
+            return false;
+        case TX_PUBKEY:
+            keyID = CPubKey(vSolutions[0]).GetID();
+            return Sign1(keyID, creator, scriptPubKey, ret);
+        case TX_PUBKEYHASH: {
+            keyID = CKeyID(uint160(vSolutions[0]));
+            if (!Sign1(keyID, creator, scriptPubKey, ret)) {
+                return false;
+            }
+
+            CPubKey vch;
+            creator.KeyStore().GetPubKey(keyID, vch);
+            ret.push_back(ToByteVector(vch));
+            return true;
+        }
+        case TX_SCRIPTHASH:
+            if (creator.KeyStore().GetCScript(uint160(vSolutions[0]),
+                                              scriptRet)) {
+                ret.push_back(
+                    std::vector<uint8_t>(scriptRet.begin(), scriptRet.end()));
+                return true;
+            }
+
+            return false;
+
+        case TX_MULTISIG:
+            // workaround CHECKMULTISIG bug
+            ret.push_back(valtype());
+            return (SignN(vSolutions, creator, scriptPubKey, ret));
+
+        default:
+            return false;
+    }
+}
+
 static bool SignContractStep(const BaseSignatureCreator &creator,
                      bool utxoAfterGenesis,
                      const CScript &scriptPubKey,
@@ -262,15 +314,6 @@ bool ProduceSlpppSignature(const Config& config, bool consensus, const BaseSigna
     solved = SignSlpppStep(creator, utxoAfterGenesis, script, result, whichType);
     CScript subscript;
 
-    if (solved && whichType == TX_SCRIPTHASH) {
-        script = subscript = CScript(result[0].begin(), result[0].end());
-        solved = solved &&
-                 SignStep(creator, utxoAfterGenesis, script, result, whichType) &&
-                 whichType != TX_SCRIPTHASH;
-        result.push_back(
-            std::vector<uint8_t>(subscript.begin(), subscript.end()));
-    }
-
     sigdata.scriptSig = PushAll(result);
 
     auto source = task::CCancellationSource::Make();
@@ -290,21 +333,31 @@ bool ProduceContractSignature(const Config& config, bool consensus, const BaseSi
     solved = SignContractStep(creator, utxoAfterGenesis, script, result, whichType, role);
     CScript subscript;
 
-    if (solved && whichType == TX_SCRIPTHASH) {
-        script = subscript = CScript(result[0].begin(), result[0].end());
-        solved = solved &&
-                 SignStep(creator, utxoAfterGenesis, script, result, whichType) &&
-                 whichType != TX_SCRIPTHASH;
-        result.push_back(
-            std::vector<uint8_t>(subscript.begin(), subscript.end()));
-    }
-
     sigdata.scriptSig = PushAll(result);
     if (role) {
         sigdata.scriptSig << OP_1;
     } else {
         sigdata.scriptSig << OP_0;
     }
+
+    auto source = task::CCancellationSource::Make();
+
+    uint32_t flags = StandardScriptVerifyFlags(genesisEnabled, utxoAfterGenesis);
+    return solved &&
+           VerifyScript(config, consensus, source->GetToken(), sigdata.scriptSig, fromPubKey,
+                        flags, creator.Checker()).value();
+}
+
+bool ProduceMultiSignature(const Config& config, bool consensus, const BaseSignatureCreator& creator, bool genesisEnabled, bool utxoAfterGenesis,
+                      const CScript& fromPubKey, SignatureData& sigdata, const CScript& sc) {
+    CScript script = fromPubKey;
+    bool solved = true;
+    std::vector<valtype> result;
+    txnouttype whichType;
+    solved = SignMultiStep(creator, utxoAfterGenesis, script, result, whichType, sc);
+    CScript subscript;
+
+    sigdata.scriptSig = PushAll(result);
 
     auto source = task::CCancellationSource::Make();
 

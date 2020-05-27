@@ -2204,6 +2204,7 @@ static UniValue createdrivetx(const Config &config,
     if (request.fHelp || request.params.size() != 2) {
         throw std::runtime_error(
             "createdrivetx [{\"txid\":\"id\",\"vout\":n},...] "
+            "[{\"address\":[\"xxx\",\"xxx\",\"xxx\"],\"amount\":x.xxx,\"metadata\":\"hex\"},"
             "[{\"address\":[\"xxx\",\"xxx\"],\"amount\":x.xxx,\"metadata\":\"hex\"},"
             "{\"address\":[\"xxx\"],\"amount\":x.xxx,\"metadata\":\"hex\"},"
             "{\"address\":[\"xxx\"],\"amount\":x.xxx},"
@@ -2231,7 +2232,7 @@ static UniValue createdrivetx(const Config &config,
             "json objects\n"
             "     [\n"
             "       {\n"
-            "         \"address\": xxx,    (string, required) The bitcoin address\n"
+            "         \"address\": [xxx,...],  (array, required) The bitcoin address\n"
             "         \"amount\": x.xxx,   (numeric or string, required) The "
             "numeric value (can be string) is the " + CURRENCY_UNIT + " amount\n"
             "         \"metadata\": \"hex\"    (string, required) The key is "
@@ -2248,10 +2249,12 @@ static UniValue createdrivetx(const Config &config,
             "\nExamples:\n" +
             HelpExampleCli("createdrivetx",
                            "\"[{\\\"txid\\\":\\\"myid\",\\\"vout\\\":0}] " 
+                           "\"[{\\\"address\\\":[\\\"xxx\\\",\\\"xxx\\\",\\\"xxx\\\"],\\\"amount\\\":x.xx,\\\"metadata\\\":\\\"hex\\\"},"
                            "\"[{\\\"address\\\":[\\\"xxx\\\",\\\"xxx\\\"],\\\"amount\\\":x.xx,\\\"metadata\\\":\\\"hex\\\"},"
                            "{\\\"address\\\":[\\\"xxx\\\"],\\\"amount\\\":x.xx,\\\"metadata\":\\\"hex\\\"},"
                            "{\\\"address\\\":[\\\"xxx\\\"],\\\"amount\\\":x.xx},{\\\"data\\\":\\\"hex\\\"}]\"") +
             HelpExampleRpc("createdrivetx",
+                           "\"[{\\\"address\\\":[\\\"xxx\\\",\\\"xxx\\\",\\\"xxx\\\"],\\\"amount\\\":x.xx,\\\"metadata\\\":\\\"hex\\\"},"
                            "\"[{\\\"address\\\":[\\\"xxx\\\",\\\"xxx\\\"],\\\"amount\\\":x.xx,\\\"metadata\\\":\\\"hex\\\"},"
                            "{\\\"address\\\":[\\\"xxx\\\"],\\\"amount\\\":x.xx,\\\"metadata\":\\\"hex\\\"},"
                            "{\\\"address\\\":[\\\"xxx\\\"],\\\"amount\\\":x.xx},{\\\"data\\\":\\\"hex\\\"}]\"")); 
@@ -2320,12 +2323,6 @@ static UniValue createdrivetx(const Config &config,
                 throw JSONRPCError(RPC_INVALID_PARAMETER,
                       "Invalid parameter, invalid vout");
             } else {
-                /*
-                std::vector<uint8_t> data = ParseHexV("006a" + o_data.getValStr(), "Data");
-                CScript dataScript(data.begin(), data.end());
-                CTxOut out(Amount(0), dataScript);
-                rawTx.vout.push_back(out);
-                */
                 std::vector<uint8_t> data = ParseHexV(o_data.getValStr(), "Data");
                 CTxOut out(Amount(0), CScript() << OP_FALSE << OP_RETURN << data);
                 rawTx.vout.push_back(out);
@@ -2333,9 +2330,62 @@ static UniValue createdrivetx(const Config &config,
             }
         }
 
-        if (o_address.size() > 2 || o_address.size() < 1) {
+        if (o_address.size() > 3 || o_address.size() < 1) {
             throw JSONRPCError(RPC_INVALID_PARAMETER,
                 "Invalid parameter, invalid address size");
+        }
+
+        if (o_address.size() == 3) {
+            std::string addr1 = o_address[0].getValStr();
+            CTxDestination destination1 = DecodeDestination(addr1, config.GetChainParams());
+            std::string addr2 = o_address[1].getValStr();
+            CTxDestination destination2 = DecodeDestination(addr2, config.GetChainParams());
+            std::string addr3 = o_address[2].getValStr();
+            CTxDestination destination3 = DecodeDestination(addr3, config.GetChainParams());
+
+            if (!IsValidDestination(destination1) || !IsValidDestination(destination2)
+                    || !IsValidDestination(destination3)) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                    std::string("Invalid Bitcoin address"));
+            }
+
+            if (addr1 == addr2 || addr1 == addr3 || addr2 == addr3) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                    std::string("Invalid parameter, duplicated address"));
+            }
+
+
+            CScript pk1 = GetScriptForDestination(destination1);
+            CScript hash1 = CScript(pk1.begin() + 2, pk1.begin() + 23);
+            CScript pk2 = GetScriptForDestination(destination2);
+            CScript hash2 = CScript(pk2.begin() + 2, pk2.begin() + 23);
+            CScript pk3 = GetScriptForDestination(destination3);
+            CScript hash3 = CScript(pk3.begin() + 2, pk3.begin() + 23);
+            CScript lock = CScript() << OP_DUP << OP_HASH160 << OP_DUP;
+            lock += hash1;
+            lock << OP_EQUAL << OP_IF << OP_DROP << OP_ELSE << OP_DUP;
+            lock += hash2;
+            lock << OP_EQUAL << OP_IF << OP_DROP << OP_ELSE << OP_DUP;
+            lock += hash3;
+            lock << OP_EQUALVERIFY << OP_DROP << OP_ENDIF << OP_ENDIF << OP_CHECKSIG;
+
+            const UniValue &o_amount = find_value(o, "amount");
+            if (o_amount.isNull()) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,
+                    "Invalid parameter, invalid vout");
+            } else {
+                const UniValue &o_script = find_value(o, "metadata");
+                Amount nAmount = AmountFromValue(o_amount.getValStr());
+                if (o_script.isNull()) {
+                    CTxOut out(nAmount, lock);
+                    rawTx.vout.push_back(out);
+                } else {
+                    std::vector<uint8_t> metadata = ParseHexV(o_script.getValStr(), "Data");
+                    CScript scScript = CScript() << OP_RETURN << metadata;
+                    CTxOut out(nAmount, lock + scScript);
+                    rawTx.vout.push_back(out);
+               }
+           }
         }
 
         if (o_address.size() == 2) {
@@ -2431,7 +2481,7 @@ static UniValue signdrivetx(const Config &config,
             "\nArguments:\n"
             "1. \"hexstring\"     (string, required) The transaction hex "
             "string\n"
-            "2. \"address\"       (string, required) The address\n"
+            "2. \"address\"       (string, optional) The address\n"
 
             "\nResult:\n"
             "{\n"
@@ -2458,8 +2508,8 @@ static UniValue signdrivetx(const Config &config,
             "}\n"
 
             "\nExamples:\n" +
-            HelpExampleCli("signcontracttransaction", "\"myhex\" \"1NmS6trAxRWXjaZeZLV2PcBRF6C8VhoXzq\"") +
-            HelpExampleRpc("signcontracttransaction", "\"myhex\" \"1NmS6trAxRWXjaZeZLV2PcBRF6C8VhoXzq\""));
+            HelpExampleCli("signdrivetx", "\"myhex\" \"1NmS6trAxRWXjaZeZLV2PcBRF6C8VhoXzq\"") +
+            HelpExampleRpc("signdrivetx", "\"myhex\" \"1NmS6trAxRWXjaZeZLV2PcBRF6C8VhoXzq\""));
     }
 
 #ifdef ENABLE_WALLET
@@ -2546,37 +2596,49 @@ static UniValue signdrivetx(const Config &config,
 
         size_t addressSize = 1;
         bool role = false;
-        CScript code = CScript(prevPubKey.begin(), prevPubKey.begin() + 1);
-        if (to_string(code) == "OP_IF ") {
-	    if (signAddress == "") {
+        CScript code = CScript(prevPubKey.begin(), prevPubKey.begin() + 3);
+        if (to_string(code) == "OP_IF OP_DUP OP_HASH160 ") {
+            if (signAddress == "") {
                 TxInErrorToJSON(txin, vErrors, "Missing address");
                 continue;
             }
             CScript sc = CScript(prevPubKey.begin() + 1, prevPubKey.begin() + 26);
-	    addressSize = 2;
+            addressSize = 2;
 
-	    CTxDestination dt = DecodeDestination(signAddress, config.GetChainParams());
+            CTxDestination dt = DecodeDestination(signAddress, config.GetChainParams());
             CScript pk = GetScriptForDestination(dt);
-	    if (to_string(sc) == to_string(pk)) {
-	        role = true;
-	    } else {
-	        role = false;
+            if (to_string(sc) == to_string(pk)) {
+	            role = true;
+            } else {
+	            role = false;
             }
+        } else if (to_string(code) == "OP_DUP OP_HASH160 OP_DUP ") {
+            if (signAddress == "") {
+                TxInErrorToJSON(txin, vErrors, "Missing address");
+                continue;
+            }
+            addressSize = 3;
         }
 
         SignatureData sigdata;
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if ((sigHashType.getBaseType() != BaseSigHashType::SINGLE) ||
             (i < mergedTx.vout.size())) {
-            if (addressSize == 2) {
+            if (addressSize == 3) {
+                CTxDestination ctdt = DecodeDestination(signAddress, config.GetChainParams());
+                CScript cpk = GetScriptForDestination(ctdt);
+                ProduceMultiSignature(config, true, MutableTransactionSignatureCreator(
+                                 &keystore, &mergedTx, i, amount, sigHashType),
+                             genesisEnabled, utxoAfterGenesis, prevPubKey, sigdata, cpk);
+            } else if (addressSize == 2) {
                 ProduceContractSignature(config, true, MutableTransactionSignatureCreator(
                                  &keystore, &mergedTx, i, amount, sigHashType),
                              genesisEnabled, utxoAfterGenesis, prevPubKey, sigdata, role);
-	    } else {
+            } else {
                 ProduceSlpppSignature(config, true, MutableTransactionSignatureCreator(
                                  &keystore, &mergedTx, i, amount, sigHashType),
                              genesisEnabled, utxoAfterGenesis, prevPubKey, sigdata);
-	    }
+            }
         }
 
         // ... and merge in other signatures:
