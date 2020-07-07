@@ -124,10 +124,10 @@ public:
             "000000000000000000e45ad2fbcc5ff3e85f0868dd8f00ad4e92dffabe28f8d2");
 
         // August 1, 2017 hard fork
-        consensus.uahfHeight = 478558;
+        consensus.uahfHeight = 23180;
 
         // November 13, 2017 hard fork
-        consensus.daaHeight = 504031;
+        consensus.daaHeight = 23180;
 
         // February 2020, Genesis Upgrade
         consensus.genesisHeight = GENESIS_ACTIVATION_MAIN;
@@ -355,10 +355,10 @@ public:
             "0000000000327972b8470c11755adf8f4319796bafae01f5a6650490b98a17db");
 
         // August 1, 2017 hard fork
-        consensus.uahfHeight = 1155875;
+        consensus.uahfHeight = 1000;
 
         // November 13, 2017 hard fork
-        consensus.daaHeight = 1188697;
+        consensus.daaHeight = 1000;
 
         // February 2020, Genesis Upgrade
         consensus.genesisHeight = GENESIS_ACTIVATION_TESTNET;
