@@ -2686,6 +2686,243 @@ static UniValue signdrivetx(const Config &config,
     return result;
 }
 
+static UniValue createauthtx(const Config &config,
+                                     const JSONRPCRequest &request) {
+    if (request.fHelp || !(request.params.size() == 6 || request.params.size() == 8)) {
+        throw std::runtime_error(
+            "createauthtx [{\"txid\":\"id\",\"vout\":n},...] "
+            "[\"address1\",\"address2\"...] [\"address3\",\"address4\"...] "
+            "\"metadata\" \"data\" x.xxx (\"address\" x.xxx) \n"
+            "\nCreate a transaction spending the given inputs and creating new "
+            "outputs.\n"
+            "Returns hex-encoded raw transaction.\n"
+            "Note that the transaction's inputs are not signed, and\n"
+            "it is not stored in the wallet or transmitted to the network.\n"
+
+            "\nArguments:\n"
+            "1. \"inputs\"                (array, required) A json array of "
+            "json objects\n"
+            "     [\n"
+            "       {\n"
+            "         \"txid\":\"id\",    (string, required) The transaction "
+            "id\n"
+            "         \"vout\":n,         (numeric, required) The output "
+            "number\n"
+            "       } \n"
+            "       ,...\n"
+            "     ]\n"
+            "2. \"admins\"                (array, required) The admin addreddes\n"
+            "3. \"members\"               (array, required) The member addresses\n"
+            "4. \"metadata\"              (string, required) hex\n"
+            "5. \"data\"                  (string, required) hex\n"
+            "6. \"amount\"                (string, required) send amount\n"
+            "7. \"address\"               (string, optional) change address\n"
+            "8. \"change\"                (string, optional) change amount\n"
+
+            "\nResult:\n"
+            "\"transaction\"              (string) hex string of the "
+            "transaction\n"
+
+            "\nExamples:\n" +
+            HelpExampleCli("createauthtx",
+                           "\"[{\\\"txid\\\":\\\"myid\",\\\"vout\\\":0}] "
+                           "[\\\"address1\\\"] [\\\"address2\\\"] \\\"metadata hex\\\" \\\"data hex\\\" 0.001\"") +
+            HelpExampleRpc("createauthtx",
+                           "\"[{\\\"txid\\\":\\\"myid\",\\\"vout\\\":0}] "
+                           "[\\\"address1\\\"] [\\\"address2\\\"] \\\"metadata hex\\\" \\\"data hex\\\" 0.001\""));
+    }
+
+    RPCTypeCheck(request.params,
+                 {UniValue::VARR, UniValue::VARR, UniValue::VARR, UniValue::VSTR, UniValue::VSTR, UniValue::VSTR, UniValue::VSTR, UniValue::VSTR}, true);
+    for (size_t i = 0; i < request.params.size(); ++i) {
+        if (request.params[i].isNull()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "Invalid parameter, arguments must be non-null");
+        }
+    }
+
+    UniValue inputs = request.params[0].get_array();
+    UniValue admins = request.params[1].get_array();
+    UniValue members = request.params[2].get_array();
+    std::string metadata = request.params[3].get_str();
+    std::string data = request.params[4].get_str();
+    std::string amount = request.params[5].get_str();
+    std::string address = "";
+    std::string change = "";
+
+    if (request.params.size() > 6) {
+        address = request.params[6].get_str();
+        change = request.params[7].get_str();
+        CTxDestination destination = DecodeDestination(address, config.GetChainParams());
+        if (!IsValidDestination(destination)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                std::string("Invalid address: ") + address);
+        }
+    }
+
+    if (admins.size() == 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "Invalid parameter, admins is empty");
+    }
+
+    size_t i = 0;
+    for (i = 0; i < admins.size(); ++i) {
+        std::string admin = admins[i].getValStr();
+        CTxDestination destination = DecodeDestination(admin, config.GetChainParams());
+        if (!IsValidDestination(destination)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                std::string("Invalid admin address: ") + admin);
+        }
+    }
+
+    for (i = 0; i < members.size(); ++i) {
+        std::string member = members[i].getValStr();
+        CTxDestination destination = DecodeDestination(member, config.GetChainParams());
+        if (!IsValidDestination(destination)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                std::string("Invalid member address: ") + member);
+        }
+    }
+
+    CMutableTransaction rawTx;
+
+    for (size_t idx = 0; idx < inputs.size(); idx++) {
+        const UniValue &input = inputs[idx];
+        const UniValue &o = input.get_obj();
+
+        uint256 txid = ParseHashO(o, "txid");
+
+        const UniValue &vout_v = find_value(o, "vout");
+        if (!vout_v.isNum()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "Invalid parameter, missing vout key");
+        }
+
+        int nOutput = vout_v.get_int();
+        if (nOutput < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                               "Invalid parameter, vout must be positive");
+        }
+
+        uint32_t nSequence =
+            (rawTx.nLockTime ? std::numeric_limits<uint32_t>::max() - 1
+                             : std::numeric_limits<uint32_t>::max());
+
+        CTxIn in(COutPoint(txid, nOutput), CScript(), nSequence);
+        rawTx.vin.push_back(in);
+    }
+
+    CScript authScript = CScript() << OP_DUP << OP_HASH160;
+    for (i = 0; i < admins.size(); ++i) {
+        CTxDestination dest = DecodeDestination(admins[i].getValStr(), config.GetChainParams());
+        CScript scriptPubKey = GetScriptForDestination(dest);
+        CScript hash = CScript(scriptPubKey.begin() + 2, scriptPubKey.begin() + 23);
+        authScript << OP_DUP;
+        authScript += hash;
+        authScript << OP_EQUAL << OP_IF << OP_TRUE;
+
+        if (i == admins.size() - 1 && members.size() == 0) {
+
+        } else {
+            authScript << OP_ELSE;
+        }
+    }
+
+    for (i = 0; i < members.size(); ++i) {
+        CTxDestination dest = DecodeDestination(members[i].getValStr(), config.GetChainParams());
+        CScript scriptPubKey = GetScriptForDestination(dest);
+        CScript hash = CScript(scriptPubKey.begin() + 2, scriptPubKey.begin() + 23);
+        authScript << OP_DUP;
+        authScript += hash;
+        authScript << OP_EQUAL << OP_IF << OP_FALSE;
+        if (i < members.size() - 1) {
+            authScript << OP_ELSE;
+        }
+    }
+
+    size_t addressSize = admins.size() + members.size();
+    for (i = 0; i < addressSize; ++i) {
+        authScript << OP_ENDIF;
+    }
+    authScript << OP_IF << OP_DROP << OP_CHECKSIG << OP_ELSE << OP_2DROP;
+    authScript << ParseHexV("e17493847239dd1fffb540a2475b577446bf859306657419aaeb07af37acfa46", "Data");
+    authScript << ParseHexV("038fdae0a9664df6c6762e8a383213c05b9e35aeb11732152e76dfb6063183d7df", "Data");
+    authScript << ParseHexV("f36e889e3fe65567dbc2c2b587bb60e112a2d6d88b933a8f32bf30b49b13a59700", "Data");
+    authScript << ParseHexV("c172a0c605b13a71d930695017654abadb9cc95c21a80f6b80f0d0742a6cedab00", "Data");
+    authScript << ParseHexV("00abed6c2a74d0f0806b0fa8215cc99cdbba4a6517506930d9713ab105c6a072c1", "Data");
+    authScript << -65;
+    for (i = 0; i < 8; ++i) {
+        authScript << 6 << OP_PICK;
+    }
+    authScript << OP_HASH256 << OP_DUP;
+    for (i = 0; i < 31; ++i) {
+        authScript << 1 << OP_SPLIT;
+    }
+    for (i = 0; i < 31; ++i) {
+        authScript << OP_SWAP << OP_CAT;
+    }
+    authScript << 0 << OP_CAT << OP_BIN2NUM;
+    authScript << 7 << OP_PICK << 6 << OP_PICK << 6 << OP_PICK << 6 << OP_PICK;
+    authScript << 6 << OP_PICK << 3 << OP_PICK << 6 << OP_PICK << 4 << OP_PICK << 7 << OP_PICK;
+    authScript << OP_MUL << OP_ADD << OP_MUL;
+    authScript << ParseHexV("414136d08c5ed2bf3ba048afe6dcaebafeffffffffffffffffffffffffffffff00", "Data");
+    authScript << OP_2DUP << OP_2DUP << OP_MOD << OP_ROT << OP_DROP << OP_SWAP << OP_OVER;
+    authScript << 0 << OP_LESSTHAN << OP_IF << OP_2DUP << OP_ADD << OP_ROT << OP_DROP << OP_SWAP << OP_ENDIF;
+    authScript << OP_OVER << OP_NIP << OP_NIP << OP_ROT << OP_DROP << OP_SWAP << OP_2DUP << 2 << OP_DIV << OP_GREATERTHAN;
+    authScript << OP_IF << OP_DUP << 2 << OP_PICK << OP_SUB << OP_ROT << OP_DROP << OP_SWAP << OP_ENDIF;
+    authScript << 3 << OP_PICK << OP_SIZE << OP_NIP << 2 << OP_PICK << OP_SIZE << OP_NIP << 4 << 2 << OP_PICK << OP_ADD << OP_OVER;
+    authScript << OP_ADD << 48 << OP_OVER << OP_CAT << 2 << OP_CAT << 3 << OP_PICK << OP_CAT;
+    authScript << 7 << OP_PICK << OP_CAT << 2 << OP_CAT << 2 << OP_PICK << OP_CAT << 5 << OP_PICK;
+    for (i = 0; i < 31; ++i) {
+        authScript << 1 << OP_SPLIT;
+    }
+    for (i = 0; i < 31; ++i) {
+        authScript << OP_SWAP << OP_CAT;
+    }
+    authScript << OP_CAT << 6 << OP_PICK << OP_CAT << OP_TOALTSTACK;
+    authScript << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_FROMALTSTACK;
+    authScript << OP_NIP << OP_DUP << 7 << OP_PICK << OP_CHECKSIGVERIFY;
+    authScript << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_DROP;
+
+    int size = authScript.size();
+    valtype vchHash(32);
+    CSHA256().Write(authScript.data(), authScript.size()).Finalize(vchHash.data());
+    CSHA256().Write(vchHash.data(), vchHash.size()).Finalize(vchHash.data());
+
+    authScript << 107 << OP_SPLIT << size << OP_SPLIT;
+    authScript << OP_DROP << OP_NIP << OP_HASH256;
+    authScript << vchHash;
+    authScript << OP_EQUAL << OP_ENDIF;
+
+    Amount nAmount = AmountFromValue(amount);
+    if (!metadata.empty()) {
+        std::vector<uint8_t> meta = ParseHexV(metadata, "Data");
+        CScript scScript = CScript() << OP_RETURN << meta;
+        authScript += scScript;
+    }
+    CTxOut out(nAmount, authScript);
+    rawTx.vout.push_back(out);
+
+    // change
+    if (request.params.size() > 6) {
+        CTxDestination dest = DecodeDestination(address, config.GetChainParams());
+        CScript scriptPubKey = GetScriptForDestination(dest);
+        Amount nChange = AmountFromValue(change);
+        CTxOut out(nChange, scriptPubKey);
+        rawTx.vout.push_back(out);
+    }
+
+    // OP_RETURN
+    if (!data.empty()) {
+        std::vector<uint8_t> hex = ParseHexV(data, "Data");
+        CTxOut out(Amount(0), CScript() << OP_FALSE << OP_RETURN << hex);
+        rawTx.vout.push_back(out);
+    }
+
+    return EncodeHexTx(CTransaction(rawTx));
+}
+
+
 static const CRPCCommand commands[] = {
     //  category            name                      actor (function)        okSafeMode
     //  ------------------- ------------------------  ----------------------  ----------
@@ -2698,6 +2935,7 @@ static const CRPCCommand commands[] = {
     { "rawtransactions",    "createslppptransaction",       createslppptransaction,     true,  {"inputs","outputs","locktime"} },
     { "rawtransactions",    "createcontracttransaction",    createcontracttransaction,  true,  {"inputs","outputs"} },
     { "rawtransactions",    "createdrivetx",                createdrivetx,              true,  {"inputs","outputs"} },
+    { "rawtransactions",    "createauthtx",                 createauthtx,               true,  {"inputs","admins","members","metadata","data","amount","address","change"} },
     { "rawtransactions",    "signslppptransaction",         signslppptransaction,       false, {"hexstring","prevtxs","privkeys","sighashtype"} },
     { "rawtransactions",    "signcontracttransaction",      signcontracttransaction,    false, {"hexstring","role"} },
     { "rawtransactions",    "signdrivetx",                  signdrivetx,                false, {"hexstring","address"} },
