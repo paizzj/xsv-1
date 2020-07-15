@@ -2884,15 +2884,19 @@ static UniValue createauthtx(const Config &config,
     authScript << OP_NIP << OP_DUP << 7 << OP_PICK << OP_CHECKSIGVERIFY;
     authScript << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_2DROP << OP_DROP;
 
+    authScript << OP_SIZE << 40 << OP_SUB << OP_SPLIT << 32 << OP_SPLIT << OP_DROP << OP_NIP;
+    authScript << OP_OVER << 8 << OP_SPLIT << 1 << OP_SPLIT << OP_NIP << OP_SWAP;
+    authScript << 0xfd << OP_CAT << 9 << OP_SPLIT << OP_DROP << OP_SWAP << OP_CAT << OP_HASH256 << OP_EQUALVERIFY;
+
     int size = authScript.size();
     valtype vchHash(32);
     CSHA256().Write(authScript.data(), authScript.size()).Finalize(vchHash.data());
     CSHA256().Write(vchHash.data(), vchHash.size()).Finalize(vchHash.data());
 
-    authScript << 107 << OP_SPLIT << size << OP_SPLIT;
+    authScript << 11 << OP_SPLIT << size << OP_SPLIT;
     authScript << OP_DROP << OP_NIP << OP_HASH256;
     authScript << vchHash;
-    authScript << OP_EQUAL << OP_ENDIF;
+    authScript << OP_EQUALVERIFY << OP_TRUE << OP_ENDIF;
 
     Amount nAmount = AmountFromValue(amount);
     if (!metadata.empty()) {
@@ -2922,6 +2926,331 @@ static UniValue createauthtx(const Config &config,
     return EncodeHexTx(CTransaction(rawTx));
 }
 
+uint256 GetOutputsHash(const CMutableTransaction &tx) {
+    CHashWriter ss(SER_GETHASH, 0);
+    for (size_t n = 0; n < tx.vout.size(); n++) {
+        ss << tx.vout[n];
+    }
+    return ss.GetHash();
+}
+
+std::string GetLength(const uint32_t size) {
+    if (size < 10) {
+        std::string res = "0" + to_string(size);
+        res.erase(res.find_last_not_of(" ") + 1);
+        return res;
+    } else if (size == 10) {
+        return "0a";
+    } else if (size == 11) {
+        return "0b";
+    } else if (size == 12) {
+        return "0c";
+    } else if (size == 13) {
+        return "0d";
+    } else if (size == 14) {
+        return "0e";
+    } else if (size == 15) {
+        return "0f";
+    } else if (size == 16) {
+        return "10";
+    }
+    return "00";
+}
+
+CScript GetOutputs(const CMutableTransaction &tx) {
+    CScript sc = CScript();
+    for (size_t n = 0; n < tx.vout.size(); n++) {
+        CScript temp = CScript() << tx.vout[n].nValue.GetSatoshis();
+        size_t size = temp.size();
+        if (size < 9) {
+            for (size_t j = 0; j < 9 - size; ++j) {
+                temp << 0x00;
+            }
+        }
+        sc += CScript(temp.begin() + 1, temp.end());
+
+        uint32_t len = GetSizeOfCompactSize(tx.vout[n].scriptPubKey.size());
+        if (len > 1) {
+            temp = CScript() << tx.vout[n].scriptPubKey.size();
+            CScript length = CScript() << 0x4d;
+            temp = CScript(length.begin() + 1, length.begin() + 2) + CScript(temp.begin() + 1, temp.end());
+            sc += temp;
+            sc += tx.vout[n].scriptPubKey;
+        } else {
+            uint32_t u = tx.vout[n].scriptPubKey.size();
+            if (u > 16) {
+                temp = CScript() << u;
+                temp = CScript(temp.begin() + 1, temp.end());
+            } else {
+                std::string str = GetLength(u);
+                std::vector<uint8_t> vec = ParseHexV(str, "Data");
+                temp = CScript(vec.begin(), vec.end());
+            }
+            temp += tx.vout[n].scriptPubKey;
+            sc += temp;
+        }
+    }
+    return sc;
+}
+
+static UniValue signauthtx(const Config &config,
+                                   const JSONRPCRequest &request) {
+#ifdef ENABLE_WALLET
+    CWallet *const pwallet = GetWalletForJSONRPCRequest(request);
+#endif
+
+    if (request.fHelp || request.params.size() != 2) {
+        throw std::runtime_error(
+            "signauthtx \"hexstring\" \"address\"\n"
+            "\nSign inputs for raw transaction (serialized, hex-encoded).\n"
+#ifdef ENABLE_WALLET
+            + HelpRequiringPassphrase(pwallet) +
+            "\n"
+#endif
+
+            "\nArguments:\n"
+            "1. \"hexstring\"     (string, required) The transaction hex\n"
+            "2. \"address\"       (string, required) The address\n"
+
+            "\nResult:\n"
+            "{\n"
+            "  \"hex\" : \"value\",           (string) The hex-encoded raw "
+            "transaction with signature(s)\n"
+            "  \"complete\" : true|false,   (boolean) If the transaction has a "
+            "complete set of signatures\n"
+            "  \"errors\" : [                 (json array of objects) Script "
+            "verification errors (if there are any)\n"
+            "    {\n"
+            "      \"txid\" : \"hash\",           (string) The hash of the "
+            "referenced, previous transaction\n"
+            "      \"vout\" : n,                (numeric) The index of the "
+            "output to spent and used as input\n"
+            "      \"scriptSig\" : \"hex\",       (string) The hex-encoded "
+            "signature script\n"
+            "      \"error\" : \"text\"           (string) Verification or "
+            "signing error related to the input\n"
+            "    }\n"
+            "    ,...\n"
+            "  ]\n"
+            "}\n"
+
+            "\nExamples:\n" +
+            HelpExampleCli("signauthtx", "\"myhex\" \"myaddress\"") +
+            HelpExampleRpc("signauthtx", "\"myhex\" \"myaddress\""));
+    }
+
+#ifdef ENABLE_WALLET
+    LOCK2(cs_main, pwallet ? &pwallet->cs_wallet : nullptr);
+#else
+    LOCK(cs_main);
+#endif
+    RPCTypeCheck(request.params, {UniValue::VSTR, UniValue::VSTR}, true);
+
+    std::vector<uint8_t> txData(ParseHexV(request.params[0], "argument 1"));
+    CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
+    std::vector<CMutableTransaction> txVariants;
+    while (!ssData.empty()) {
+        try {
+            CMutableTransaction tx;
+            ssData >> tx;
+            txVariants.push_back(tx);
+        } catch (const std::exception &) {
+            throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+        }
+    }
+
+    if (txVariants.empty()) {
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Missing transaction");
+    }
+
+    std::string address = request.params[1].get_str();
+    CTxDestination dest = DecodeDestination(address, config.GetChainParams());
+    if (!IsValidDestination(dest)) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+            std::string("Invalid address: ") + address);
+    }
+
+    CMutableTransaction mergedTx(txVariants[0]);
+
+    CCoinsView viewDummy;
+    CCoinsViewCache view(&viewDummy);
+    {
+        std::shared_lock lock(mempool.smtx);
+        CCoinsViewCache &viewChain = *pcoinsTip;
+        CCoinsViewMemPool viewMempool(&viewChain, mempool);
+        view.SetBackend(viewMempool);
+
+        for (const CTxIn &txin : mergedTx.vin) {
+            view.AccessCoin(txin.prevout);
+        }
+
+        view.SetBackend(viewDummy);
+    }
+
+    bool fGivenKeys = false;
+    CBasicKeyStore tempKeystore;
+#ifdef ENABLE_WALLET
+    if (pwallet) {
+        EnsureWalletIsUnlocked(pwallet);
+    }
+#endif
+
+#ifdef ENABLE_WALLET
+    const CKeyStore &keystore =
+        ((fGivenKeys || !pwallet) ? tempKeystore : *pwallet);
+#else
+    const CKeyStore &keystore = tempKeystore;
+#endif
+
+    SigHashType sigHashType = SigHashType().withForkId();
+    UniValue vErrors(UniValue::VARR);
+    const CTransaction txConst(mergedTx);
+
+    bool genesisEnabled = IsGenesisEnabled(config, chainActive.Height() + 1);
+
+    for (size_t i = 0; i < mergedTx.vin.size(); i++) {
+        CTxIn &txin = mergedTx.vin[i];
+        const Coin &coin = view.AccessCoin(txin.prevout);
+        if (coin.IsSpent()) {
+            TxInErrorToJSON(txin, vErrors, "Input not found or already spent");
+            continue;
+        }
+
+        const CScript &prevPubKey = coin.GetTxOut().scriptPubKey;
+        const Amount amount = coin.GetTxOut().nValue;
+        bool utxoAfterGenesis = IsGenesisEnabled(config, coin, chainActive.Height() + 1);
+
+        bool auth = true;
+        CScript code = CScript(prevPubKey.begin(), prevPubKey.begin() + 3);
+        if (prevPubKey.size() == 25){
+            auth = false;
+        }
+
+        SignatureData sigdata;
+        if ((sigHashType.getBaseType() != BaseSigHashType::SINGLE) ||
+            (i < mergedTx.vout.size())) {
+            if (auth) {
+
+                CScript outs = GetOutputs(mergedTx);
+                uint32_t length = GetSizeOfCompactSize(outs.size());
+                CScript temp = CScript();
+                CScript sc0 = CScript();
+                if (length == 1) {
+                    temp << outs.size();
+                    temp = CScript(temp.begin() + 1, temp.end());
+                } else {
+                    temp << outs.size();
+                    sc0 << 0x4d;
+                    temp = CScript(sc0.begin() + 1, sc0.begin() + 2) + CScript(temp.begin() + 1, temp.end());
+                }
+                sc0 = temp + outs;
+
+                uint256 hashOutputs = GetOutputsHash(mergedTx);
+
+                std::string str = "02000000";
+                str += "0000000000000000000000000000000000000000000000000000000000000000";
+                str += "0000000000000000000000000000000000000000000000000000000000000000";
+
+                std::vector<uint8_t> vec = ParseHexV(str, "Data");
+                CScript sc1(vec.begin(), vec.end());
+
+                str = txin.prevout.GetTxId().ToString();
+                vec = ParseHexV(str, "Data");
+                reverse(vec.begin(), vec.end());
+                CScript sc2(vec.begin(), vec.end());
+
+                str = "";
+                std::stringstream stream;
+                stream << std::hex << txin.prevout.GetN();
+                stream >> str;
+                if (str.size() % 2 == 1) {
+                    str = "0" + str;
+                }
+                str += "000000";
+                vec = ParseHexV(str, "Data");
+                CScript sc3(vec.begin(), vec.end());
+
+                temp = CScript() << prevPubKey.size();
+                CScript sc4 = CScript() << 0xfd;
+                sc4 = CScript(sc4.begin() + 1, sc4.begin() + 2);
+                sc4 += CScript(temp.begin() + 1, temp.end());
+                sc4 += prevPubKey;
+
+                CScript sc5 = CScript() << amount.GetSatoshis();
+                size_t size = sc5.size();
+                if (size < 9) {
+                    for (size_t j = 0; j < 9 - size; ++j) {
+                        sc5 << 0x00;
+                    }
+                }
+                sc5 = CScript(sc5.begin() + 1, sc5.end());
+
+                str = "ffffffff";
+                vec = ParseHexV(str, "Data");
+                CScript sc6(vec.begin(), vec.end());
+
+                str = hashOutputs.ToString();
+                vec = ParseHexV(str, "Data");
+                reverse(vec.begin(), vec.end());
+                sc6 += CScript(vec.begin(), vec.end());
+
+                str = "00000000c1000000";
+                vec = ParseHexV(str, "Data");
+                sc6 += CScript(vec.begin(), vec.end());
+
+                CScript scriptPubKey = GetScriptForDestination(dest);
+
+                ProduceSignature(config, true, MutableTransactionSignatureCreator(
+                    &keystore, &mergedTx, i, amount, sigHashType),
+                    genesisEnabled, utxoAfterGenesis, scriptPubKey, sigdata);
+                CScript sc7 = CScript(sigdata.scriptSig.end() - 34, sigdata.scriptSig.end());
+
+                CScript script = sc1 + sc2 + sc3 + sc4 + sc5 + sc6;
+                temp = CScript() << script.size();
+                temp = CScript(temp.begin() + 1, temp.end());
+                CScript sp = CScript() << 0x4d;
+                sp = CScript(sp.begin() + 1, sp.begin() + 2);
+                script = sp + temp + script;
+
+                sigdata.scriptSig = sc0 + script + sc7;
+            } else {
+                ProduceSignature(config, true, MutableTransactionSignatureCreator(
+                    &keystore, &mergedTx, i, amount, sigHashType),
+                    genesisEnabled, utxoAfterGenesis, prevPubKey, sigdata);
+            }
+        }
+
+        UpdateTransaction(mergedTx, i, sigdata);
+
+        ScriptError serror = SCRIPT_ERR_OK;
+        auto source = task::CCancellationSource::Make();
+        auto res =
+            VerifyScript(
+                config,
+                true,
+                source->GetToken(),
+                txin.scriptSig,
+                prevPubKey,
+                StandardScriptVerifyFlags(genesisEnabled, utxoAfterGenesis),
+                TransactionSignatureChecker(&txConst, i, amount),
+                &serror);
+        if (!res.value())
+        {
+            TxInErrorToJSON(txin, vErrors, ScriptErrorString(serror));
+        }
+    }
+
+    bool fComplete = vErrors.empty();
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("hex", EncodeHexTx(CTransaction(mergedTx))));
+    result.push_back(Pair("complete", fComplete));
+    if (!vErrors.empty()) {
+        result.push_back(Pair("errors", vErrors));
+    }
+
+    return result;
+}
 
 static const CRPCCommand commands[] = {
     //  category            name                      actor (function)        okSafeMode
@@ -2939,6 +3268,7 @@ static const CRPCCommand commands[] = {
     { "rawtransactions",    "signslppptransaction",         signslppptransaction,       false, {"hexstring","prevtxs","privkeys","sighashtype"} },
     { "rawtransactions",    "signcontracttransaction",      signcontracttransaction,    false, {"hexstring","role"} },
     { "rawtransactions",    "signdrivetx",                  signdrivetx,                false, {"hexstring","address"} },
+    { "rawtransactions",    "signauthtx",                   signauthtx,                 false, {"hexstring","address"} },
     { "blockchain",         "gettxoutproof",          gettxoutproof,          true,  {"txids", "blockhash"} },
     { "blockchain",         "verifytxoutproof",       verifytxoutproof,       true,  {"proof"} },
 };
