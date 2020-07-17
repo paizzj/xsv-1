@@ -2861,7 +2861,8 @@ static UniValue createauthtx(const Config &config,
     for (i = 0; i < 31; ++i) {
         authScript << OP_SWAP << OP_CAT;
     }
-    authScript << 0 << OP_CAT << OP_BIN2NUM;
+    authScript << ParseHexV("00", "Data");
+    authScript << OP_CAT << OP_BIN2NUM;
     authScript << 7 << OP_PICK << 6 << OP_PICK << 6 << OP_PICK << 6 << OP_PICK;
     authScript << 6 << OP_PICK << 3 << OP_PICK << 6 << OP_PICK << 4 << OP_PICK << 7 << OP_PICK;
     authScript << OP_MUL << OP_ADD << OP_MUL;
