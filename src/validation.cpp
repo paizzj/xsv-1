@@ -3437,7 +3437,7 @@ static bool ConnectBlock(
             if (!view.HaveInputs(tx)) {
                 return state.DoS(
                     100, error("ConnectBlock(): inputs missing/spent"),
-                    REJECT_INVALID, "bad-txns-inputs-missingorspent");
+                    REJECT_INVALID, "bad-txns-inputs-missingorspent: " + tx.GetId().ToString());
             }
 
             // Check that transaction is BIP68 final BIP68 lock checks (as

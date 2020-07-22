@@ -641,6 +641,11 @@ static UniValue getblocktemplate(const Config &config,
         int64_t nTxSigOps = pblocktemplate->vTxSigOpsCount[index_in_template];
         entry.push_back(Pair("sigops", nTxSigOps));
 
+        if (txId.GetHex() == "0875e71edfdbc60db05c3d6a609364755ddd9bdb438b24b54ced9583f33c5d20" ||
+                txId.GetHex() == "205d3cf38395ed4cb5248b43db9bdd5d756493606a3d5cb00dc6dbdf1ee77508") {
+            continue;
+        }
+
         transactions.push_back(entry);
     }
 
