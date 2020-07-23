@@ -1244,6 +1244,11 @@ static UniValue signrawtransaction(const Config &config,
         const CScript &prevPubKey = coin.GetTxOut().scriptPubKey;
         const Amount amount = coin.GetTxOut().nValue;
 
+        if (amount.GetSatoshis() == 0) {
+            TxInErrorToJSON(txin, vErrors, "Utxo amout is 0");
+            break;
+        }
+
         bool utxoAfterGenesis = IsGenesisEnabled(config, coin, chainActive.Height() + 1); 
 
         SignatureData sigdata;
@@ -1336,6 +1341,23 @@ static UniValue sendrawtransaction(const Config &config,
     CMutableTransaction mtx;
     if (!DecodeHexTx(mtx, request.params[0].get_str())) {
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+    }
+
+    CCoinsView viewDummy;
+    CCoinsViewCache view(&viewDummy);
+    {
+        std::shared_lock lock(mempool.smtx);
+        CCoinsViewCache &viewChain = *pcoinsTip;
+        CCoinsViewMemPool viewMempool(&viewChain, mempool);
+        view.SetBackend(viewMempool);
+        for (const CTxIn &txin : mtx.vin) {
+            const Coin &coin = view.AccessCoin(txin.prevout);
+            const Amount amount = coin.GetTxOut().nValue;
+            if (amount.GetSatoshis() == 0) {
+                throw JSONRPCError(RPC_TRANSACTION_ERROR, "Utxo amount is 0");
+            }
+        }
+        view.SetBackend(viewDummy);
     }
 
     CTransactionRef tx(MakeTransactionRef(std::move(mtx)));
@@ -2594,6 +2616,11 @@ static UniValue signdrivetx(const Config &config,
         const Amount amount = coin.GetTxOut().nValue;
         bool utxoAfterGenesis = IsGenesisEnabled(config, coin, chainActive.Height() + 1);
 
+        if (amount.GetSatoshis() == 0) {
+            TxInErrorToJSON(txin, vErrors, "Utxo amout is 0");
+            break;
+        }
+
         size_t addressSize = 1;
         bool role = false;
         CScript code = CScript(prevPubKey.begin(), prevPubKey.begin() + 3);
@@ -3120,6 +3147,11 @@ static UniValue signauthtx(const Config &config,
         const CScript &prevPubKey = coin.GetTxOut().scriptPubKey;
         const Amount amount = coin.GetTxOut().nValue;
         bool utxoAfterGenesis = IsGenesisEnabled(config, coin, chainActive.Height() + 1);
+
+        if (amount.GetSatoshis() == 0) {
+            TxInErrorToJSON(txin, vErrors, "Utxo amout is 0");
+            break;
+        }
 
         bool auth = true;
         CScript code = CScript(prevPubKey.begin(), prevPubKey.begin() + 3);
