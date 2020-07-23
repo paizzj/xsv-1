@@ -18,6 +18,11 @@ CTxDestination DecodeDestination(const std::string &addr,
     return DecodeBase58Addr(addr, params);
 }
 
+CTxDestination DecodeFchDestination(const std::string &addr,
+                                 const CChainParams &params) {
+    return DecodeBase58FchAddr(addr, params);
+}
+
 bool IsValidDestinationString(const std::string &addr,
                               const CChainParams &params) {
     return IsValidDestination(DecodeDestination(addr, params));

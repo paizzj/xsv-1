@@ -157,5 +157,6 @@ typedef CBitcoinExtKeyBase<CExtPubKey, BIP32_EXTKEY_SIZE,
 
 std::string EncodeBase58Addr(const CTxDestination &dest, const CChainParams &);
 CTxDestination DecodeBase58Addr(const std::string &str, const CChainParams &);
+CTxDestination DecodeBase58FchAddr(const std::string &str, const CChainParams &);
 
 #endif // BITCOIN_BASE58_H

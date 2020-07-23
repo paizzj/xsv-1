@@ -236,18 +236,8 @@ static UniValue fchtoxsv(const Config &config,
     LOCK(cs_main);
 #endif
 
-    CTxDestination dest = CNoDestination();
-    std::vector<uint8_t> data;
-    uint160 hash;
-    if (DecodeBase58Check(request.params[0].get_str(), data)) {
-        const std::vector<uint8_t> &pubkey_prefix = std::vector<uint8_t>(1, 35);
-        if (data.size() == 20 + pubkey_prefix.size() &&
-            std::equal(pubkey_prefix.begin(), pubkey_prefix.end(), data.begin())) {
-            memcpy(hash.begin(), &data[pubkey_prefix.size()], 20);
-            dest = CKeyID(hash);
-        }
-    }
-
+    CTxDestination dest =
+        DecodeFchDestination(request.params[0].get_str(), config.GetChainParams());
     bool isValid = IsValidDestination(dest);
 
     UniValue ret(UniValue::VOBJ);

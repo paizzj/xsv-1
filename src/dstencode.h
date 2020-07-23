@@ -13,6 +13,7 @@ class CChainParams;
 
 std::string EncodeDestination(const CTxDestination &dest, const Config &config);
 CTxDestination DecodeDestination(const std::string &addr, const CChainParams &);
+CTxDestination DecodeFchDestination(const std::string &addr, const CChainParams &);
 bool IsValidDestinationString(const std::string &addr,
                               const CChainParams &params);
 
